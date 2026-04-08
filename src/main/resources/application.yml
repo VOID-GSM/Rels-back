@@ -1,0 +1,5 @@
+oauth:
+  datagsm:
+    client-id: ${DATAGSM_CLIENT_ID}
+    client-secret: ${DATAGSM_CLIENT_SECRET}
+    redirect-uris: ${DATAGSM_REDIRECT_URIS:http://localhost:3000/callback,http://localhost:3001/callback}
