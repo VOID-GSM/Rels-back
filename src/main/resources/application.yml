@@ -1,5 +1,25 @@
+server:
+  port: ${SERVER_PORT}
+
 oauth:
   datagsm:
     client-id: ${DATAGSM_CLIENT_ID}
     client-secret: ${DATAGSM_CLIENT_SECRET}
-    redirect-uris: ${DATAGSM_REDIRECT_URIS:http://localhost:3000/callback,http://localhost:3001/callback}
+    redirect-uris: ${DATAGSM_REDIRECT_URIS}
+
+spring:
+  datasource:
+    url: ${DB_HOST}
+    driver-class-name: ${DB_DRIVER}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: ${DB_DDL}
+    properties:
+      hibernate:
+        format_sql: true
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION}
