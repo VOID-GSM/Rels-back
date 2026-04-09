@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -50,7 +51,7 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
 						List.of(new SimpleGrantedAuthority(role)));
 				authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 				SecurityContextHolder.getContext().setAuthentication(authentication);
-			} catch (Exception e) {
+			} catch (JwtException e) {
 				log.debug("Invalid JWT ignored: {}", e.getMessage());
 				SecurityContextHolder.clearContext();
 			}
