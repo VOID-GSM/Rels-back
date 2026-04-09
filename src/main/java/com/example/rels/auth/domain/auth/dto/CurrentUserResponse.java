@@ -1,4 +1,4 @@
-package com.example.rels.domain.auth.dto;
+package com.example.rels.auth.domain.auth.dto;
 
 public record CurrentUserResponse(
 		Long userId,

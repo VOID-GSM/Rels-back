@@ -1,10 +1,10 @@
-package com.example.rels.domain.user.repository;
+package com.example.rels.auth.domain.user.repository;
 
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import com.example.rels.domain.user.entity.UserEntity;
+import com.example.rels.auth.domain.user.entity.UserEntity;
 
 public interface UserRepository extends JpaRepository<UserEntity, Long> {
 

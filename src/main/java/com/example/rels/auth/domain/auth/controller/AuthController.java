@@ -1,4 +1,4 @@
-package com.example.rels.domain.auth.controller;
+package com.example.rels.auth.domain.auth.controller;
 
 import java.net.URI;
 
@@ -12,12 +12,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.rels.domain.auth.dto.CurrentUserResponse;
-import com.example.rels.domain.auth.dto.OAuthSignInRequest;
-import com.example.rels.domain.auth.dto.OAuthSignInResponse;
-import com.example.rels.domain.auth.service.AuthService;
-import com.example.rels.domain.auth.service.DgOAuthFlowService;
-import com.example.rels.global.security.AuthenticatedUser;
+import com.example.rels.auth.domain.auth.dto.CurrentUserResponse;
+import com.example.rels.auth.domain.auth.dto.OAuthSignInRequest;
+import com.example.rels.auth.domain.auth.dto.OAuthSignInResponse;
+import com.example.rels.auth.domain.auth.service.AuthService;
+import com.example.rels.auth.domain.auth.service.DgOAuthFlowService;
+import com.example.rels.auth.global.security.AuthenticatedUser;
 
 import jakarta.validation.Valid;
 import org.springframework.web.server.ResponseStatusException;

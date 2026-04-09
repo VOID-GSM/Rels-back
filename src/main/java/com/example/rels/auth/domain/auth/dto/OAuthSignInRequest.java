@@ -1,4 +1,4 @@
-package com.example.rels.domain.auth.dto;
+package com.example.rels.auth.domain.auth.dto;
 
 import jakarta.validation.constraints.NotBlank;
 

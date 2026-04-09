@@ -1,4 +1,4 @@
-package com.example.rels.domain.auth.service;
+package com.example.rels.auth.domain.auth.service;
 
 import java.net.URI;
 import java.time.Duration;
@@ -11,7 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.example.rels.domain.auth.dto.OAuthSignInResponse;
+import com.example.rels.auth.domain.auth.dto.OAuthSignInResponse;
 
 import team.themoment.datagsm.sdk.oauth.DataGsmOAuthClient;
 import team.themoment.datagsm.sdk.oauth.model.AuthorizationUrlBuilder;

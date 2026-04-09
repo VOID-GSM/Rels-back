@@ -1,4 +1,4 @@
-package com.example.rels.domain.user.entity;
+package com.example.rels.auth.domain.user.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

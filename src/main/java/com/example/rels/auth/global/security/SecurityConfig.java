@@ -1,4 +1,4 @@
-package com.example.rels.global.security;
+package com.example.rels.auth.global.security;
 
 import java.util.List;
 

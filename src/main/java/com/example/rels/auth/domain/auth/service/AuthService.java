@@ -1,4 +1,4 @@
-package com.example.rels.domain.auth.service;
+package com.example.rels.auth.domain.auth.service;
 
 import java.util.Set;
 
@@ -10,12 +10,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.example.rels.domain.auth.dto.OAuthSignInRequest;
-import com.example.rels.domain.auth.dto.OAuthSignInResponse;
-import com.example.rels.domain.user.entity.Role;
-import com.example.rels.domain.user.entity.UserEntity;
-import com.example.rels.domain.user.repository.UserRepository;
-import com.example.rels.global.security.JwtTokenProvider;
+import com.example.rels.auth.domain.auth.dto.OAuthSignInRequest;
+import com.example.rels.auth.domain.auth.dto.OAuthSignInResponse;
+import com.example.rels.auth.domain.user.entity.Role;
+import com.example.rels.auth.domain.user.entity.UserEntity;
+import com.example.rels.auth.domain.user.repository.UserRepository;
+import com.example.rels.auth.global.security.JwtTokenProvider;
 
 import team.themoment.datagsm.sdk.oauth.DataGsmOAuthClient;
 import team.themoment.datagsm.sdk.oauth.exception.DataGsmException;

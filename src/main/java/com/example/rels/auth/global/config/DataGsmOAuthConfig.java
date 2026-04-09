@@ -1,4 +1,4 @@
-package com.example.rels.global.config;
+package com.example.rels.auth.global.config;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
