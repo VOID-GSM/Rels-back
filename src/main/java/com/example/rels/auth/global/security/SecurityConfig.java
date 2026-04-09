@@ -1,7 +1,10 @@
 package com.example.rels.auth.global.security;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -20,9 +23,16 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
 	private final TokenAuthenticationFilter tokenAuthenticationFilter;
+	private final List<String> allowedOrigins;
 
-	public SecurityConfig(TokenAuthenticationFilter tokenAuthenticationFilter) {
+	public SecurityConfig(
+			TokenAuthenticationFilter tokenAuthenticationFilter,
+			@Value("${app.cors.allowed-origins:http://localhost:3000}") String allowedOrigins) {
 		this.tokenAuthenticationFilter = tokenAuthenticationFilter;
+		this.allowedOrigins = Arrays.stream(allowedOrigins.split(","))
+				.map(String::trim)
+				.filter(origin -> !origin.isEmpty())
+				.collect(Collectors.toList());
 	}
 
 	@Bean
@@ -47,7 +57,7 @@ public class SecurityConfig {
 	@Bean
 	public CorsConfigurationSource corsConfigurationSource() {
 		CorsConfiguration configuration = new CorsConfiguration();
-		configuration.setAllowedOriginPatterns(List.of("*"));
+		configuration.setAllowedOrigins(allowedOrigins);
 		configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
 		configuration.setAllowedHeaders(List.of("*"));
 		configuration.setAllowCredentials(false);
