@@ -38,7 +38,7 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/auth/signin").permitAll()
 						.requestMatchers("/error").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
-						.anyRequest().permitAll())
+						.anyRequest().authenticated())
 				.addFilterBefore(tokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
 		return http.build();
@@ -57,4 +57,3 @@ public class SecurityConfig {
 		return source;
 	}
 }
-
