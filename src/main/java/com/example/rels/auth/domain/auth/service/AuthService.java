@@ -99,10 +99,9 @@ public class AuthService {
 		return userRepository.findByEmail(email)
 				.map(existing -> {
 				existing.updateProfile(name, studentNumber);
-				return userRepository.save(existing);
+				return existing;
 			})
 				.orElseGet(() -> userRepository.save(new UserEntity(email, name, studentNumber, Role.USER)));
 	}
 }
-
 
