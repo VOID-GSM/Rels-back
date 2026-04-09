@@ -13,6 +13,11 @@ spring:
     driver-class-name: ${DB_DRIVER}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
   jpa:
     hibernate:
       ddl-auto: ${DB_DDL}
@@ -26,4 +31,6 @@ jwt:
 
 app:
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  oauth-state:
+    store: ${OAUTH_STATE_STORE:memory}
