@@ -13,6 +13,30 @@ This project now includes a DG OAuth-based authentication flow.
 - `GET /api/auth/me`
   - Returns the current authenticated user from the JWT bearer token.
 
+- `POST /api/lectures`
+  - Creates a lecture with title/description (authenticated user).
+- `PATCH /api/lectures/{lectureId}`
+  - Updates lecture title/description (lecture creator only).
+- `DELETE /api/lectures/{lectureId}`
+  - Deletes a lecture (lecture creator only).
+- `GET /api/lectures`
+  - Returns lecture list with enrolled/waiting counts.
+- `GET /api/lectures/{lectureId}`
+  - Returns lecture detail and current user's enrollment status.
+- `POST /api/lectures/{lectureId}/enrollments`
+  - Applies for a lecture. Up to 30 `ENROLLED`, then `WAITING`.
+- `DELETE /api/lectures/{lectureId}/enrollments`
+  - Cancels lecture application; if an enrolled seat opens, first waiting user is promoted automatically.
+- `PATCH /api/lectures/{lectureId}/admin-details`
+  - Sets location/date/time after lecture is confirmed (admin only).
+
+## Lecture Rules
+
+- A lecture is confirmed automatically when enrolled members reach 10 or more.
+- Maximum enrolled capacity is 30.
+- Applicants after capacity are placed in waiting order by request time.
+- If an enrolled user cancels, the first waiting user is promoted automatically.
+
 ## Environment variables
 
 - `DATAGSM_CLIENT_ID`

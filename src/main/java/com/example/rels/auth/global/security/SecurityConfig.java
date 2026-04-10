@@ -48,6 +48,7 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/auth/signin").permitAll()
 						.requestMatchers("/error").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
+						.requestMatchers("/api/lectures/**").authenticated()
 						.anyRequest().authenticated())
 				.addFilterBefore(tokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
