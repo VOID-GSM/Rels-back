@@ -51,7 +51,7 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
 						List.of(new SimpleGrantedAuthority(role)));
 				authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 				SecurityContextHolder.getContext().setAuthentication(authentication);
-			} catch (JwtException e) {
+			} catch (JwtException | NumberFormatException e) {
 				log.debug("Invalid JWT ignored: {}", e.getMessage());
 				SecurityContextHolder.clearContext();
 			}
@@ -68,4 +68,3 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
 		return null;
 	}
 }
-
