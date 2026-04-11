@@ -1,10 +1,11 @@
 package com.example.rels.lecture.service;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,13 +54,11 @@ public class LectureService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<LectureSummaryResponse> getLectures() {
-		List<LectureEntity> lectures = lectureRepository.findAllByOrderByCreatedAtDesc();
-		Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId = getEnrollmentCountsByLectureIds(lectures);
+	public Page<LectureSummaryResponse> getLectures(Pageable pageable) {
+		Page<LectureEntity> lectures = lectureRepository.findAllByOrderByCreatedAtDesc(pageable);
+		Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId = getEnrollmentCountsByLectureIds(lectures.getContent());
 
-		return lectures.stream()
-				.map(lecture -> toLectureSummary(lecture, enrollmentCountsByLectureId))
-				.toList();
+		return lectures.map(lecture -> toLectureSummary(lecture, enrollmentCountsByLectureId));
 	}
 
 	@Transactional(readOnly = true)
