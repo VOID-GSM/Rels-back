@@ -79,8 +79,13 @@ public class AuthService {
 					user.getRole().name());
 		} catch (DataGsmException e) {
 			log.warn("DataGSM OAuth error: status={}, message={}", e.getStatusCode(), e.getMessage());
-			throw new ResponseStatusException(HttpStatus.valueOf(e.getStatusCode()), "OAuth 인증에 실패했습니다.");
+				throw new ResponseStatusException(resolveStatus(e.getStatusCode()), "OAuth 인증에 실패했습니다.");
 		}
+	}
+
+	private HttpStatus resolveStatus(int statusCode) {
+		HttpStatus resolved = HttpStatus.resolve(statusCode);
+		return resolved != null ? resolved : HttpStatus.BAD_GATEWAY;
 	}
 
 	public void assertAllowedRedirectUri(String redirectUri) {
