@@ -5,11 +5,10 @@ import java.util.Optional;
 
 public interface OAuthStateStore {
 
-	void save(String state, String redirectUri, String codeVerifier, Duration ttl);
+    void save(String state, String redirectUri, String codeVerifier, Duration ttl);
 
-	Optional<LoginState> consume(String state);
+    Optional<LoginState> consume(String state);
 
-	record LoginState(String redirectUri, String codeVerifier) {
-	}
+    record LoginState(String redirectUri, String codeVerifier) {
+    }
 }
-
