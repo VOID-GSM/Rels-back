@@ -1,6 +1,9 @@
 package com.example.rels.lecture.service;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -19,6 +22,7 @@ import com.example.rels.lecture.entity.EnrollmentStatus;
 import com.example.rels.lecture.entity.LectureEnrollmentEntity;
 import com.example.rels.lecture.entity.LectureEntity;
 import com.example.rels.lecture.entity.LectureStatus;
+import com.example.rels.lecture.repository.LectureEnrollmentCountProjection;
 import com.example.rels.lecture.repository.LectureEnrollmentRepository;
 import com.example.rels.lecture.repository.LectureRepository;
 
@@ -50,8 +54,11 @@ public class LectureService {
 
 	@Transactional(readOnly = true)
 	public List<LectureSummaryResponse> getLectures() {
-		return lectureRepository.findAllByOrderByCreatedAtDesc().stream()
-				.map(this::toLectureSummary)
+		List<LectureEntity> lectures = lectureRepository.findAllByOrderByCreatedAtDesc();
+		Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId = getEnrollmentCountsByLectureIds(lectures);
+
+		return lectures.stream()
+				.map(lecture -> toLectureSummary(lecture, enrollmentCountsByLectureId))
 				.toList();
 	}
 
@@ -144,9 +151,10 @@ public class LectureService {
 				.ifPresent(LectureEnrollmentEntity::promoteToEnrolled);
 	}
 
-	private LectureSummaryResponse toLectureSummary(LectureEntity lecture) {
-		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.ENROLLED);
-		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.WAITING);
+	private LectureSummaryResponse toLectureSummary(LectureEntity lecture,
+			Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId) {
+		long enrolledCount = getEnrollmentCount(enrollmentCountsByLectureId, lecture.getId(), EnrollmentStatus.ENROLLED);
+		long waitingCount = getEnrollmentCount(enrollmentCountsByLectureId, lecture.getId(), EnrollmentStatus.WAITING);
 
 		return new LectureSummaryResponse(
 				lecture.getId(),
@@ -161,6 +169,29 @@ public class LectureService {
 				lecture.getLectureDate(),
 				lecture.getLectureTime(),
 				lecture.getCreatedAt());
+	}
+
+	private Map<Long, Map<EnrollmentStatus, Long>> getEnrollmentCountsByLectureIds(List<LectureEntity> lectures) {
+		if (lectures.isEmpty()) {
+			return Map.of();
+		}
+
+		List<Long> lectureIds = lectures.stream()
+				.map(LectureEntity::getId)
+				.toList();
+
+		return lectureEnrollmentRepository.countEnrollmentsByLectureIds(lectureIds).stream()
+				.collect(Collectors.groupingBy(
+					LectureEnrollmentCountProjection::getLectureId,
+					Collectors.toMap(
+						LectureEnrollmentCountProjection::getStatus,
+						LectureEnrollmentCountProjection::getEnrollmentCount)));
+	}
+
+	private long getEnrollmentCount(Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId,
+			Long lectureId, EnrollmentStatus status) {
+		return enrollmentCountsByLectureId.getOrDefault(lectureId, Map.of())
+				.getOrDefault(status, 0L);
 	}
 
 	private LectureDetailResponse toLectureDetail(LectureEntity lecture, Long userId) {

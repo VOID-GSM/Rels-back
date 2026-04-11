@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
@@ -13,6 +14,7 @@ import jakarta.persistence.LockModeType;
 
 public interface LectureRepository extends JpaRepository<LectureEntity, Long> {
 
+	@EntityGraph(attributePaths = "creator")
 	List<LectureEntity> findAllByOrderByCreatedAtDesc();
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
