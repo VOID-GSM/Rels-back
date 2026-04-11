@@ -32,7 +32,6 @@ public class LectureService {
 
 	private static final long CONFIRM_THRESHOLD = 10;
 	private static final long MAX_CAPACITY = 30;
-	private static final String ADMIN_ROLE = "ADMIN";
 
 	private final LectureRepository lectureRepository;
 	private final LectureEnrollmentRepository lectureEnrollmentRepository;
@@ -83,11 +82,8 @@ public class LectureService {
 	}
 
 	@Transactional
-	public LectureDetailResponse updateAdminDetails(Long lectureId, Long userId, String role,
+	public LectureDetailResponse updateAdminDetails(Long lectureId, Long userId,
 			LectureAdminDetailsRequest request) {
-		if (!ADMIN_ROLE.equals(role)) {
-			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "관리자만 강의 세부 정보를 설정할 수 있습니다.");
-		}
 
 		LectureEntity lecture = requireLecture(lectureId);
 		if (lecture.getStatus() != LectureStatus.CONFIRMED) {

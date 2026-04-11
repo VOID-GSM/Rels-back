@@ -7,6 +7,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -96,12 +97,13 @@ public class LectureController {
 	}
 
 	@PatchMapping("/{lectureId}/admin-details")
+	@PreAuthorize("hasRole('ADMIN')")
 	public LectureDetailResponse updateAdminDetails(
 			@PathVariable Long lectureId,
 			@AuthenticationPrincipal AuthenticatedUser currentUser,
 			@Valid @RequestBody LectureAdminDetailsRequest request) {
 		AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		return lectureService.updateAdminDetails(lectureId, authenticatedUser.userId(), authenticatedUser.role(), request);
+		return lectureService.updateAdminDetails(lectureId, authenticatedUser.userId(), request);
 	}
 
 	private AuthenticatedUser requireUser(AuthenticatedUser currentUser) {
