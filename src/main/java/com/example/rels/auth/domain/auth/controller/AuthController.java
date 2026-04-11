@@ -18,21 +18,18 @@ import com.example.rels.auth.domain.auth.dto.OAuthSignInResponse;
 import com.example.rels.auth.domain.auth.service.AuthService;
 import com.example.rels.auth.domain.auth.service.DgOAuthFlowService;
 import com.example.rels.auth.global.security.AuthenticatedUser;
+import lombok.RequiredArgsConstructor;
 
 import jakarta.validation.Valid;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/auth")
+@RequiredArgsConstructor
 public class AuthController {
 
 	private final AuthService authService;
 	private final DgOAuthFlowService dgOAuthFlowService;
-
-	public AuthController(AuthService authService, DgOAuthFlowService dgOAuthFlowService) {
-		this.authService = authService;
-		this.dgOAuthFlowService = dgOAuthFlowService;
-	}
 
 	@GetMapping("/dg/start")
 	public ResponseEntity<Void> startDgLogin(@RequestParam String redirectUri) {
