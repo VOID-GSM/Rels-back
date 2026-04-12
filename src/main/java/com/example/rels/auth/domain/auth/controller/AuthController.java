@@ -58,7 +58,7 @@ public class AuthController {
 				currentUser.email(),
 				currentUser.name(),
 				currentUser.studentNumber(),
-				currentUser.role());
+				currentUser.role().name());
 	}
 }
 

@@ -1,0 +1,34 @@
+server:
+  port: 0
+
+oauth:
+  datagsm:
+    client-id: test-client
+    client-secret: test-secret
+    redirect-uris: http://localhost/callback
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:rels-test;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+jwt:
+  secret: test-test-test-test-test-test-test-test
+  expiration: 60
+
+app:
+  cors:
+    allowed-origins: http://localhost:3000
+  oauth-state:
+    store: memory
+
