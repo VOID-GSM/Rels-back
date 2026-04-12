@@ -12,6 +12,8 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.example.rels.auth.domain.user.entity.Role;
+
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
@@ -42,16 +44,20 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
 				String email = claims.get("email", String.class);
 				String name = claims.get("name", String.class);
 				String studentNumber = claims.get("studentNumber", String.class);
-				String role = claims.get("role", String.class);
+				String roleClaim = claims.get("role", String.class);
+				if (roleClaim == null || roleClaim.isBlank()) {
+					throw new IllegalArgumentException("Missing role claim");
+				}
+				Role role = Role.valueOf(roleClaim);
 
 				AuthenticatedUser principal = new AuthenticatedUser(userId, email, name, studentNumber, role);
 				UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
 						principal,
 						null,
-						List.of(new SimpleGrantedAuthority(role)));
+						List.of(new SimpleGrantedAuthority("ROLE_" + role.name())));
 				authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 				SecurityContextHolder.getContext().setAuthentication(authentication);
-			} catch (JwtException | NumberFormatException e) {
+			} catch (JwtException | IllegalArgumentException e) {
 				log.debug("Invalid JWT ignored: {}", e.getMessage());
 				SecurityContextHolder.clearContext();
 			}
