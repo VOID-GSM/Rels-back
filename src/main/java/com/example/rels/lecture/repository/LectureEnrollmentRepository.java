@@ -5,11 +5,11 @@ import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
 
 import com.example.rels.lecture.entity.EnrollmentStatus;
 import com.example.rels.lecture.entity.LectureEnrollmentEntity;
-import com.example.rels.lecture.repository.LectureEnrollmentCountProjection;
 
 public interface LectureEnrollmentRepository extends JpaRepository<LectureEnrollmentEntity, Long> {
 
@@ -27,5 +27,8 @@ public interface LectureEnrollmentRepository extends JpaRepository<LectureEnroll
 
 	Optional<LectureEnrollmentEntity> findFirstByLectureIdAndStatusOrderByRequestedAtAscIdAsc(Long lectureId,
 			EnrollmentStatus status);
+
+	@EntityGraph(attributePaths = { "lecture", "lecture.creator" })
+	List<LectureEnrollmentEntity> findByUserIdOrderByRequestedAtDesc(Long userId);
 }
 
