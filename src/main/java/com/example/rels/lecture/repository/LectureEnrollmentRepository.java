@@ -28,6 +28,9 @@ public interface LectureEnrollmentRepository extends JpaRepository<LectureEnroll
 	Optional<LectureEnrollmentEntity> findFirstByLectureIdAndStatusOrderByRequestedAtAscIdAsc(Long lectureId,
 			EnrollmentStatus status);
 
+	@EntityGraph(attributePaths = "user")
+	List<LectureEnrollmentEntity> findByLectureIdOrderByRequestedAtAscIdAsc(Long lectureId);
+
 	@EntityGraph(attributePaths = { "lecture", "lecture.creator" })
 	List<LectureEnrollmentEntity> findByUserIdOrderByRequestedAtDesc(Long userId);
 }
