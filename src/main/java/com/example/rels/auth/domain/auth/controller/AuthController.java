@@ -52,13 +52,7 @@ public class AuthController {
 		if (currentUser == null) {
 			throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증 정보가 필요합니다.");
 		}
-
-		return new CurrentUserResponse(
-				currentUser.userId(),
-				currentUser.email(),
-				currentUser.name(),
-				currentUser.studentNumber(),
-				currentUser.role().name());
+		return authService.getCurrentUserProfile(currentUser.userId());
 	}
 }
 
