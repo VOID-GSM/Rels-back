@@ -11,12 +11,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.example.rels.auth.domain.user.entity.Role;
 import com.example.rels.auth.domain.user.entity.UserEntity;
 import com.example.rels.auth.domain.user.repository.UserRepository;
+import com.example.rels.lecture.dto.EnrollmentApplicantResponse;
 import com.example.rels.lecture.dto.EnrollmentResponse;
 import com.example.rels.lecture.dto.LectureAdminDetailsRequest;
 import com.example.rels.lecture.dto.LectureCreateRequest;
 import com.example.rels.lecture.dto.LectureDetailResponse;
+import com.example.rels.lecture.dto.LectureEnrollmentListResponse;
 import com.example.rels.lecture.dto.LectureSummaryResponse;
 import com.example.rels.lecture.dto.LectureUpdateRequest;
 import com.example.rels.lecture.entity.EnrollmentStatus;
@@ -140,10 +143,37 @@ public class LectureService {
 		return new EnrollmentResponse(lecture.getId(), "CANCELED", enrolledCount, waitingCount);
 	}
 
+	@Transactional(readOnly = true)
+	public LectureEnrollmentListResponse getEnrollmentLists(Long lectureId, Long userId, Role role) {
+		LectureEntity lecture = requireLecture(lectureId);
+		validateEnrollmentViewer(lecture, userId, role);
+
+		List<LectureEnrollmentEntity> enrollments = lectureEnrollmentRepository.findByLectureIdOrderByRequestedAtAscIdAsc(lectureId);
+		List<EnrollmentApplicantResponse> enrolledApplicants = enrollments.stream()
+				.filter(enrollment -> enrollment.getStatus() == EnrollmentStatus.ENROLLED)
+				.map(this::toEnrollmentApplicant)
+				.toList();
+		List<EnrollmentApplicantResponse> waitingApplicants = enrollments.stream()
+				.filter(enrollment -> enrollment.getStatus() == EnrollmentStatus.WAITING)
+				.map(this::toEnrollmentApplicant)
+				.toList();
+
+		return new LectureEnrollmentListResponse(lecture.getId(), enrolledApplicants, waitingApplicants);
+	}
+
 	private void promoteFirstWaitingUser(Long lectureId) {
 		lectureEnrollmentRepository.findFirstByLectureIdAndStatusOrderByRequestedAtAscIdAsc(lectureId,
 				EnrollmentStatus.WAITING)
 				.ifPresent(LectureEnrollmentEntity::promoteToEnrolled);
+	}
+
+	private EnrollmentApplicantResponse toEnrollmentApplicant(LectureEnrollmentEntity enrollment) {
+		UserEntity user = enrollment.getUser();
+		return new EnrollmentApplicantResponse(
+				user.getId(),
+				user.getName(),
+				user.getStudentNumber(),
+				enrollment.getRequestedAt());
 	}
 
 	private LectureSummaryResponse toLectureSummary(LectureEntity lecture,
@@ -231,6 +261,15 @@ public class LectureService {
 	private void validateCreator(LectureEntity lecture, Long userId) {
 		if (!lecture.getCreator().getId().equals(userId)) {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "강의 작성자만 수정 또는 삭제할 수 있습니다.");
+		}
+	}
+
+	private void validateEnrollmentViewer(LectureEntity lecture, Long userId, Role role) {
+		if (role == Role.ADMIN) {
+			return;
+		}
+		if (!lecture.getCreator().getId().equals(userId)) {
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "강의 신청자 목록은 작성자 또는 관리자만 조회할 수 있습니다.");
 		}
 	}
 }
