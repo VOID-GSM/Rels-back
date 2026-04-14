@@ -23,6 +23,7 @@ import com.example.rels.lecture.dto.EnrollmentResponse;
 import com.example.rels.lecture.dto.LectureAdminDetailsRequest;
 import com.example.rels.lecture.dto.LectureCreateRequest;
 import com.example.rels.lecture.dto.LectureDetailResponse;
+import com.example.rels.lecture.dto.LectureEnrollmentListResponse;
 import com.example.rels.lecture.dto.LectureSummaryResponse;
 import com.example.rels.lecture.dto.LectureUpdateRequest;
 import com.example.rels.lecture.service.LectureService;
@@ -94,6 +95,14 @@ public class LectureController {
 			@AuthenticationPrincipal AuthenticatedUser currentUser) {
 		AuthenticatedUser authenticatedUser = requireUser(currentUser);
 		return lectureService.cancelEnrollment(lectureId, authenticatedUser.userId());
+	}
+
+	@GetMapping("/{lectureId}/enrollments")
+	public LectureEnrollmentListResponse getEnrollmentLists(
+			@PathVariable Long lectureId,
+			@AuthenticationPrincipal AuthenticatedUser currentUser) {
+		AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		return lectureService.getEnrollmentLists(lectureId, authenticatedUser.userId(), authenticatedUser.role());
 	}
 
 	@PatchMapping("/{lectureId}/admin-details")
