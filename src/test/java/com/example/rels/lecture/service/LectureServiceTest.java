@@ -3,6 +3,7 @@ package com.example.rels.lecture.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -22,11 +23,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.example.rels.auth.domain.user.entity.Role;
 import com.example.rels.auth.domain.user.entity.UserEntity;
 import com.example.rels.auth.domain.user.repository.UserRepository;
+import com.example.rels.lecture.dto.LectureCreateRequest;
 import com.example.rels.lecture.dto.EnrollmentResponse;
+import com.example.rels.lecture.dto.LectureEnrollmentListResponse;
+import com.example.rels.lecture.dto.LectureDetailResponse;
 import com.example.rels.lecture.dto.LectureSummaryResponse;
 import com.example.rels.lecture.entity.EnrollmentStatus;
 import com.example.rels.lecture.entity.LectureEnrollmentEntity;
@@ -60,8 +65,8 @@ class LectureServiceTest {
 		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
 		setId(creator);
 
-		LectureEntity firstLecture = new LectureEntity("title1", "description1", creator);
-		LectureEntity secondLecture = new LectureEntity("title2", "description2", creator);
+		LectureEntity firstLecture = new LectureEntity("title1", "description1", 15, creator);
+		LectureEntity secondLecture = new LectureEntity("title2", "description2", 20, creator);
 		setId(firstLecture, 11L);
 		setId(secondLecture, 12L);
 
@@ -95,7 +100,7 @@ class LectureServiceTest {
 
 	@Test
 	void enrollConfirmsLectureAtThreshold() {
-		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER));
+		LectureEntity lecture = new LectureEntity("title", "description", 30, new UserEntity("creator@test.com", "creator", "1000000000", Role.USER));
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
 		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
@@ -121,7 +126,7 @@ class LectureServiceTest {
 
 	@Test
 	void enrollMovesToWaitingAfterCapacity() {
-		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER));
+		LectureEntity lecture = new LectureEntity("title", "description", 30, new UserEntity("creator@test.com", "creator", "1000000000", Role.USER));
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
 		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
@@ -145,7 +150,7 @@ class LectureServiceTest {
 
 	@Test
 	void cancelPromotesFirstWaitingUser() {
-		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER));
+		LectureEntity lecture = new LectureEntity("title", "description", 30, new UserEntity("creator@test.com", "creator", "1000000000", Role.USER));
 		setId(lecture, 1L);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 		UserEntity waitingUser = new UserEntity("wait@test.com", "wait", "1000000002", Role.USER);
@@ -170,6 +175,73 @@ class LectureServiceTest {
 		assertNotNull(response.lectureId());
 	}
 
+	@Test
+	void getEnrollmentListsSeparatesEnrolledAndWaiting() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator, 10L);
+		LectureEntity lecture = new LectureEntity("title", "description", 30, creator);
+		setId(lecture, 1L);
+
+		UserEntity enrolledUser = new UserEntity("enrolled@test.com", "enrolled", "1000000001", Role.USER);
+		setId(enrolledUser, 21L);
+		UserEntity waitingUser = new UserEntity("waiting@test.com", "waiting", "1000000002", Role.USER);
+		setId(waitingUser, 22L);
+
+		LectureEnrollmentEntity enrolled = new LectureEnrollmentEntity(lecture, enrolledUser, EnrollmentStatus.ENROLLED);
+		LectureEnrollmentEntity waiting = new LectureEnrollmentEntity(lecture, waitingUser, EnrollmentStatus.WAITING);
+
+		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+		when(lectureEnrollmentRepository.findByLectureIdOrderByRequestedAtAscIdAsc(1L))
+				.thenReturn(List.of(enrolled, waiting));
+
+		LectureEnrollmentListResponse response = lectureService.getEnrollmentLists(1L, 10L, Role.USER);
+
+		assertEquals(1L, response.lectureId());
+		assertEquals(1, response.enrolledApplicants().size());
+		assertEquals(21L, response.enrolledApplicants().getFirst().userId());
+		assertEquals("enrolled", response.enrolledApplicants().getFirst().name());
+		assertEquals(1, response.waitingApplicants().size());
+		assertEquals(22L, response.waitingApplicants().getFirst().userId());
+		assertEquals("waiting", response.waitingApplicants().getFirst().name());
+	}
+
+	@Test
+	void getEnrollmentListsForbiddenWhenNotCreatorOrAdmin() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator, 10L);
+		LectureEntity lecture = new LectureEntity("title", "description", 30, creator);
+		setId(lecture, 1L);
+
+		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+
+		ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+				() -> lectureService.getEnrollmentLists(1L, 99L, Role.USER));
+
+		assertEquals(403, exception.getStatusCode().value());
+	}
+
+	@Test
+	void createLectureUsesRequestedCapacity() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator, 1L);
+		LectureCreateRequest request = new LectureCreateRequest("new title", "new description", 42);
+
+		when(userRepository.findById(1L)).thenReturn(Optional.of(creator));
+		when(lectureRepository.save(org.mockito.Mockito.any(LectureEntity.class))).thenAnswer(invocation -> {
+			LectureEntity saved = invocation.getArgument(0);
+			setId(saved, 1L);
+			return saved;
+		});
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 1L)).thenReturn(Optional.empty());
+
+		LectureDetailResponse response = lectureService.createLecture(1L, request);
+
+		assertEquals(42, response.capacity());
+		assertEquals("new title", response.title());
+	}
+
 	private void setId(LectureEntity lecture, Long id) {
 		try {
 			Field field = LectureEntity.class.getDeclaredField("id");
@@ -181,10 +253,14 @@ class LectureServiceTest {
 	}
 
 	private void setId(UserEntity user) {
+		setId(user, 1L);
+	}
+
+	private void setId(UserEntity user, Long id) {
 		try {
 			Field field = UserEntity.class.getDeclaredField("id");
 			field.setAccessible(true);
-			field.set(user, 1L);
+			field.set(user, id);
 		} catch (ReflectiveOperationException e) {
 			throw new IllegalStateException("id 설정 실패", e);
 		}

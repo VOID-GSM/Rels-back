@@ -34,7 +34,6 @@ import com.example.rels.lecture.repository.LectureRepository;
 public class LectureService {
 
 	private static final long CONFIRM_THRESHOLD = 10;
-	private static final long MAX_CAPACITY = 30;
 
 	private final LectureRepository lectureRepository;
 	private final LectureEnrollmentRepository lectureEnrollmentRepository;
@@ -51,7 +50,11 @@ public class LectureService {
 	@Transactional
 	public LectureDetailResponse createLecture(Long userId, LectureCreateRequest request) {
 		UserEntity creator = requireUser(userId);
-		LectureEntity lecture = lectureRepository.save(new LectureEntity(request.title(), request.description(), creator));
+		LectureEntity lecture = lectureRepository.save(new LectureEntity(
+				request.title(),
+				request.description(),
+				request.capacity(),
+				creator));
 		return toLectureDetail(lecture, userId);
 	}
 
@@ -73,7 +76,12 @@ public class LectureService {
 	public LectureDetailResponse updateLecture(Long lectureId, Long userId, LectureUpdateRequest request) {
 		LectureEntity lecture = requireLecture(lectureId);
 		validateCreator(lecture, userId);
-		lecture.updateBasicInfo(request.title(), request.description());
+		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
+		if (request.capacity() < enrolledCount) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					"현재 신청 확정 인원보다 작게 정원을 설정할 수 없습니다.");
+		}
+		lecture.updateBasicInfo(request.title(), request.description(), request.capacity());
 		return toLectureDetail(lecture, userId);
 	}
 
@@ -110,7 +118,7 @@ public class LectureService {
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
 
-		EnrollmentStatus status = enrolledCount >= MAX_CAPACITY ? EnrollmentStatus.WAITING : EnrollmentStatus.ENROLLED;
+		EnrollmentStatus status = enrolledCount >= lecture.getCapacity() ? EnrollmentStatus.WAITING : EnrollmentStatus.ENROLLED;
 		lectureEnrollmentRepository.save(new LectureEnrollmentEntity(lecture, user, status));
 
 		if (status == EnrollmentStatus.ENROLLED && lecture.getStatus() == LectureStatus.OPEN
@@ -188,6 +196,7 @@ public class LectureService {
 				lecture.getCreator().getId(),
 				lecture.getCreator().getName(),
 				lecture.getStatus().name(),
+				lecture.getCapacity(),
 				enrolledCount,
 				waitingCount,
 				lecture.getLectureLocation(),
@@ -234,6 +243,7 @@ public class LectureService {
 				lecture.getCreator().getId(),
 				lecture.getCreator().getName(),
 				lecture.getStatus().name(),
+				lecture.getCapacity(),
 				enrolledCount,
 				waitingCount,
 				myEnrollmentStatus,
