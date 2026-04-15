@@ -3,6 +3,7 @@ package com.example.rels.lecture.entity;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Map;
 
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -10,6 +11,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 import com.example.rels.auth.domain.user.entity.UserEntity;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.MapKeyColumn;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -35,8 +39,11 @@ public class LectureEntity {
 	@Column(nullable = false, columnDefinition = "TEXT")
 	private String description;
 
-	@Column(nullable = false)
-	private int capacity;
+	@ElementCollection
+	@CollectionTable(name = "lecture_grade_capacities", joinColumns = @JoinColumn(name = "lecture_id"))
+	@MapKeyColumn(name = "grade")
+	@Column(name = "capacity", nullable = false)
+	private Map<Integer, Integer> gradeCapacities;
 
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "creator_id", nullable = false)
@@ -66,10 +73,10 @@ public class LectureEntity {
 	protected LectureEntity() {
 	}
 
-	public LectureEntity(String title, String description, int capacity, UserEntity creator) {
+	public LectureEntity(String title, String description, Map<Integer, Integer> gradeCapacities, UserEntity creator) {
 		this.title = title;
 		this.description = description;
-		this.capacity = capacity;
+		this.gradeCapacities = gradeCapacities;
 		this.creator = creator;
 		this.status = LectureStatus.OPEN;
 	}
@@ -86,8 +93,8 @@ public class LectureEntity {
 		return description;
 	}
 
-	public int getCapacity() {
-		return capacity;
+	public Map<Integer, Integer> getGradeCapacities() {
+		return gradeCapacities;
 	}
 
 	public UserEntity getCreator() {
@@ -114,10 +121,10 @@ public class LectureEntity {
 		return createdAt;
 	}
 
-	public void updateBasicInfo(String title, String description, int capacity) {
+	public void updateBasicInfo(String title, String description, Map<Integer, Integer> gradeCapacities) {
 		this.title = title;
 		this.description = description;
-		this.capacity = capacity;
+		this.gradeCapacities = gradeCapacities;
 	}
 
 	public void confirm() {
