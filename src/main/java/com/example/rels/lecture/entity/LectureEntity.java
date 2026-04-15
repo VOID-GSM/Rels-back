@@ -114,9 +114,10 @@ public class LectureEntity {
 		return createdAt;
 	}
 
-	public void updateBasicInfo(String title, String description) {
+	public void updateBasicInfo(String title, String description, int capacity) {
 		this.title = title;
 		this.description = description;
+		this.capacity = capacity;
 	}
 
 	public void confirm() {
