@@ -1,7 +1,9 @@
-package com.example.rels.lecture.entity;
+		package com.example.rels.lecture.entity;
 
-public enum LectureStatus {
-	OPEN,
-	CONFIRMED
-}
+		public enum LectureStatus {
+			OPEN,
+			CONFIRMED,
+			FAILED,
+			CLOSED
+		}
 

@@ -124,6 +124,14 @@ public class LectureEntity {
 		this.status = LectureStatus.CONFIRMED;
 	}
 
+	public void fail() {
+		this.status = LectureStatus.FAILED;
+	}
+
+	public void closeRecruitment() {
+		this.status = LectureStatus.CLOSED;
+	}
+
 	public void updateAdminDetails(String lectureLocation, LocalDate lectureDate, LocalTime lectureTime) {
 		this.lectureLocation = lectureLocation;
 		this.lectureDate = lectureDate;
