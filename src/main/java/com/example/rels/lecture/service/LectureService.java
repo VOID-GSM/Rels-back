@@ -53,7 +53,7 @@ public class LectureService {
 		LectureEntity lecture = lectureRepository.save(new LectureEntity(
 				request.title(),
 				request.description(),
-				request.capacity(),
+				request.gradeCapacities(),
 				creator));
 		return toLectureDetail(lecture, userId);
 	}
@@ -76,12 +76,7 @@ public class LectureService {
 	public LectureDetailResponse updateLecture(Long lectureId, Long userId, LectureUpdateRequest request) {
 		LectureEntity lecture = requireLecture(lectureId);
 		validateCreator(lecture, userId);
-		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
-		if (request.capacity() < enrolledCount) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-					"현재 신청 확정 인원보다 작게 정원을 설정할 수 없습니다.");
-		}
-		lecture.updateBasicInfo(request.title(), request.description(), request.capacity());
+		lecture.updateBasicInfo(request.title(), request.description(), request.gradeCapacities());
 		return toLectureDetail(lecture, userId);
 	}
 
@@ -107,7 +102,7 @@ public class LectureService {
 	}
 
 	@Transactional
-	public EnrollmentResponse enroll(Long lectureId, Long userId) {
+	public EnrollmentResponse enroll(Long lectureId, Long userId, int grade) {
 		LectureEntity lecture = requireLectureForUpdate(lectureId);
 		if (lecture.getStatus() == LectureStatus.FAILED || lecture.getStatus() == LectureStatus.CLOSED) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "모집이 종료된 강의입니다.");
@@ -119,18 +114,21 @@ public class LectureService {
 					throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 신청한 강의입니다.");
 				});
 
-		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
+		long enrolledCountForGrade = lectureEnrollmentRepository.countByLectureIdAndGradeAndStatus(
+			lectureId, grade, EnrollmentStatus.ENROLLED);
+		int gradeCapacity = lecture.getGradeCapacities().getOrDefault(grade, 0);
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
 
-		EnrollmentStatus status = enrolledCount >= lecture.getCapacity() ? EnrollmentStatus.WAITING : EnrollmentStatus.ENROLLED;
-		lectureEnrollmentRepository.save(new LectureEnrollmentEntity(lecture, user, status));
+		EnrollmentStatus status = enrolledCountForGrade >= gradeCapacity ? EnrollmentStatus.WAITING : EnrollmentStatus.ENROLLED;
+		lectureEnrollmentRepository.save(new LectureEnrollmentEntity(lecture, user, grade, status));
 
+		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
 		if (status == EnrollmentStatus.ENROLLED && lecture.getStatus() == LectureStatus.OPEN
-				&& enrolledCount + 1 >= CONFIRM_THRESHOLD) {
+				&& enrolledCount >= CONFIRM_THRESHOLD) {
 			lecture.confirm();
 		}
 
-		long nextEnrolledCount = status == EnrollmentStatus.ENROLLED ? enrolledCount + 1 : enrolledCount;
+		long nextEnrolledCount = status == EnrollmentStatus.ENROLLED ? enrolledCount : enrolledCount;
 		long nextWaitingCount = status == EnrollmentStatus.WAITING ? waitingCount + 1 : waitingCount;
 
 		return new EnrollmentResponse(lectureId, status.name(), nextEnrolledCount, nextWaitingCount);
@@ -204,7 +202,7 @@ public class LectureService {
 				lecture.getCreator().getId(),
 				lecture.getCreator().getName(),
 				lecture.getStatus().name(),
-				lecture.getCapacity(),
+				lecture.getGradeCapacities(),
 				enrolledCount,
 				waitingCount,
 				lecture.getLectureLocation(),
@@ -251,7 +249,7 @@ public class LectureService {
 				lecture.getCreator().getId(),
 				lecture.getCreator().getName(),
 				lecture.getStatus().name(),
-				lecture.getCapacity(),
+				lecture.getGradeCapacities(),
 				enrolledCount,
 				waitingCount,
 				myEnrollmentStatus,
