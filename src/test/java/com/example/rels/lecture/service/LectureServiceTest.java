@@ -9,6 +9,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,6 +31,7 @@ import com.example.rels.auth.domain.user.entity.Role;
 import com.example.rels.auth.domain.user.entity.UserEntity;
 import com.example.rels.auth.domain.user.repository.UserRepository;
 import com.example.rels.lecture.dto.LectureCreateRequest;
+import com.example.rels.lecture.dto.LectureAdminDetailsRequest;
 import com.example.rels.lecture.dto.EnrollmentResponse;
 import com.example.rels.lecture.dto.LectureEnrollmentListResponse;
 import com.example.rels.lecture.dto.LectureDetailResponse;
@@ -240,6 +243,63 @@ class LectureServiceTest {
 
 		assertEquals(42, response.capacity());
 		assertEquals("new title", response.title());
+	}
+
+	@Test
+	void enrollRejectsClosedLecture() {
+		LectureEntity lecture = new LectureEntity("title", "description", 30,
+				new UserEntity("creator@test.com", "creator", "1000000000", Role.USER));
+		lecture.confirm();
+		lecture.closeRecruitment();
+
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+
+		ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+				() -> lectureService.enroll(1L, 2L));
+
+		assertEquals(400, exception.getStatusCode().value());
+	}
+
+	@Test
+	void updateAdminDetailsClosesRecruitment() {
+		LectureEntity lecture = new LectureEntity("title", "description", 30,
+				new UserEntity("creator@test.com", "creator", "1000000000", Role.USER));
+		setId(lecture, 1L);
+		lecture.confirm();
+
+		LectureAdminDetailsRequest request = new LectureAdminDetailsRequest("hall", LocalDate.of(2026, 4, 20),
+				LocalTime.of(14, 0));
+
+		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(10L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 1L)).thenReturn(Optional.empty());
+
+		LectureDetailResponse response = lectureService.updateAdminDetails(1L, 1L, request);
+
+		assertEquals(LectureStatus.CLOSED, lecture.getStatus());
+		assertEquals("CLOSED", response.lectureStatus());
+	}
+
+	@Test
+	void cancelEnrollmentMarksLectureAsFailedWhenConfirmedFallsBelowThreshold() {
+		LectureEntity lecture = new LectureEntity("title", "description", 30,
+				new UserEntity("creator@test.com", "creator", "1000000000", Role.USER));
+		setId(lecture, 1L);
+		lecture.confirm();
+		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
+		LectureEnrollmentEntity enrolled = new LectureEnrollmentEntity(lecture, applicant, EnrollmentStatus.ENROLLED);
+
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(enrolled));
+		when(lectureEnrollmentRepository.findFirstByLectureIdAndStatusOrderByRequestedAtAscIdAsc(1L, EnrollmentStatus.WAITING))
+				.thenReturn(Optional.empty());
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(9L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
+
+		lectureService.cancelEnrollment(1L, 2L);
+
+		assertEquals(LectureStatus.FAILED, lecture.getStatus());
 	}
 
 	private void setId(LectureEntity lecture, Long id) {

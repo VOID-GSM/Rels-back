@@ -97,17 +97,21 @@ public class LectureService {
 			LectureAdminDetailsRequest request) {
 
 		LectureEntity lecture = requireLecture(lectureId);
-		if (lecture.getStatus() != LectureStatus.CONFIRMED) {
+		if (lecture.getStatus() != LectureStatus.CONFIRMED && lecture.getStatus() != LectureStatus.CLOSED) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "강의가 확정된 후에만 세부 정보를 설정할 수 있습니다.");
 		}
 
 		lecture.updateAdminDetails(request.lectureLocation(), request.lectureDate(), request.lectureTime());
+		lecture.closeRecruitment();
 		return toLectureDetail(lecture, userId);
 	}
 
 	@Transactional
 	public EnrollmentResponse enroll(Long lectureId, Long userId) {
 		LectureEntity lecture = requireLectureForUpdate(lectureId);
+		if (lecture.getStatus() == LectureStatus.FAILED || lecture.getStatus() == LectureStatus.CLOSED) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "모집이 종료된 강의입니다.");
+		}
 		UserEntity user = requireUser(userId);
 
 		lectureEnrollmentRepository.findByLectureIdAndUserId(lectureId, userId)
@@ -147,6 +151,10 @@ public class LectureService {
 
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
+
+		if (lecture.getStatus() == LectureStatus.CONFIRMED && enrolledCount < CONFIRM_THRESHOLD) {
+			lecture.fail();
+		}
 
 		return new EnrollmentResponse(lecture.getId(), "CANCELED", enrolledCount, waitingCount);
 	}
