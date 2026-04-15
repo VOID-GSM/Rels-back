@@ -17,6 +17,8 @@ public interface LectureEnrollmentRepository extends JpaRepository<LectureEnroll
 
 	long countByLectureIdAndStatus(Long lectureId, EnrollmentStatus status);
 
+	long countByLectureIdAndGradeAndStatus(Long lectureId, int grade, EnrollmentStatus status);
+
 	@Query("""
 			select e.lecture.id as lectureId, e.status as status, count(e) as enrollmentCount
 			from LectureEnrollmentEntity e
@@ -34,4 +36,3 @@ public interface LectureEnrollmentRepository extends JpaRepository<LectureEnroll
 	@EntityGraph(attributePaths = { "lecture", "lecture.creator" })
 	List<LectureEnrollmentEntity> findByUserIdOrderByRequestedAtDesc(Long userId);
 }
-
