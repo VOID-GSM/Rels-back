@@ -29,6 +29,7 @@ import com.example.rels.lecture.dto.LectureUpdateRequest;
 import com.example.rels.lecture.service.LectureService;
 
 import jakarta.validation.Valid;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/lectures")
@@ -84,9 +85,14 @@ public class LectureController {
 	@PostMapping("/{lectureId}/enrollments")
 	public EnrollmentResponse enroll(
 			@PathVariable Long lectureId,
-			@AuthenticationPrincipal AuthenticatedUser currentUser) {
+			@AuthenticationPrincipal AuthenticatedUser currentUser,
+			@RequestBody Map<String, Integer> body) {
 		AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		return lectureService.enroll(lectureId, authenticatedUser.userId());
+		if (!body.containsKey("grade")) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "grade 파라미터가 필요합니다.");
+		}
+		int grade = body.get("grade");
+		return lectureService.enroll(lectureId, authenticatedUser.userId(), grade);
 	}
 
 	@DeleteMapping("/{lectureId}/enrollments")
@@ -122,4 +128,3 @@ public class LectureController {
 		return currentUser;
 	}
 }
-
