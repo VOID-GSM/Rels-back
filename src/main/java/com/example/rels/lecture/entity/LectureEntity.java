@@ -35,6 +35,9 @@ public class LectureEntity {
 	@Column(nullable = false, columnDefinition = "TEXT")
 	private String description;
 
+	@Column(nullable = false)
+	private int capacity;
+
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "creator_id", nullable = false)
 	private UserEntity creator;
@@ -63,9 +66,10 @@ public class LectureEntity {
 	protected LectureEntity() {
 	}
 
-	public LectureEntity(String title, String description, UserEntity creator) {
+	public LectureEntity(String title, String description, int capacity, UserEntity creator) {
 		this.title = title;
 		this.description = description;
+		this.capacity = capacity;
 		this.creator = creator;
 		this.status = LectureStatus.OPEN;
 	}
@@ -80,6 +84,10 @@ public class LectureEntity {
 
 	public String getDescription() {
 		return description;
+	}
+
+	public int getCapacity() {
+		return capacity;
 	}
 
 	public UserEntity getCreator() {
