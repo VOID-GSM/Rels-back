@@ -77,10 +77,10 @@ public class AuthService {
 
 			Student student = userInfo.getStudent();
 			if (student == null || student.getName() == null || student.getStudentNumber() == null || userInfo.getEmail() == null) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학생 정보가 유효하지 않습니다.");
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학생 정보가 유효하�� 않습니다.");
 			}
 
-			UserEntity user = findOrCreateUser(userInfo.getEmail(), student.getName(), String.valueOf(student.getStudentNumber()));
+			UserEntity user = findOrCreateUser(userInfo.getEmail(), student.getName(), String.valueOf(student.getStudentNumber()), student.getGrade());
 			String accessToken = jwtTokenProvider.createToken(user);
 
 			return new OAuthSignInResponse(
@@ -159,13 +159,12 @@ public class AuthService {
 				enrollment.getRequestedAt());
 	}
 
-	private UserEntity findOrCreateUser(String email, String name, String studentNumber) {
+	private UserEntity findOrCreateUser(String email, String name, String studentNumber, int grade) {
 		return userRepository.findByEmail(email)
 				.map(existing -> {
-				existing.updateProfile(name, studentNumber);
-				return existing;
-			})
-				.orElseGet(() -> userRepository.save(new UserEntity(email, name, studentNumber, Role.USER)));
+					existing.updateProfile(name, studentNumber, grade);
+					return existing;
+				})
+				.orElseGet(() -> userRepository.save(new UserEntity(email, name, studentNumber, grade, Role.USER)));
 	}
 }
-

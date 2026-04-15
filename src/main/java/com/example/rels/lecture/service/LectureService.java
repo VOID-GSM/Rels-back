@@ -102,7 +102,7 @@ public class LectureService {
 	}
 
 	@Transactional
-	public EnrollmentResponse enroll(Long lectureId, Long userId, int grade) {
+	public EnrollmentResponse enroll(Long lectureId, Long userId) {
 		LectureEntity lecture = requireLectureForUpdate(lectureId);
 		if (lecture.getStatus() == LectureStatus.FAILED || lecture.getStatus() == LectureStatus.CLOSED) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "모집이 종료된 강의입니다.");
@@ -114,6 +114,7 @@ public class LectureService {
 					throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 신청한 강의입니다.");
 				});
 
+		int grade = user.getGrade();
 		long enrolledCountForGrade = lectureEnrollmentRepository.countByLectureIdAndGradeAndStatus(
 			lectureId, grade, EnrollmentStatus.ENROLLED);
 		int gradeCapacity = lecture.getGradeCapacities().getOrDefault(grade, 0);

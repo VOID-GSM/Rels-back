@@ -85,14 +85,9 @@ public class LectureController {
 	@PostMapping("/{lectureId}/enrollments")
 	public EnrollmentResponse enroll(
 			@PathVariable Long lectureId,
-			@AuthenticationPrincipal AuthenticatedUser currentUser,
-			@RequestBody Map<String, Integer> body) {
+			@AuthenticationPrincipal AuthenticatedUser currentUser) {
 		AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		if (!body.containsKey("grade")) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "grade 파라미터가 필요합니다.");
-		}
-		int grade = body.get("grade");
-		return lectureService.enroll(lectureId, authenticatedUser.userId(), grade);
+		return lectureService.enroll(lectureId, authenticatedUser.userId());
 	}
 
 	@DeleteMapping("/{lectureId}/enrollments")
