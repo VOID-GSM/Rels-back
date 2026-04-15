@@ -11,6 +11,7 @@ public record LectureDetailResponse(
 		Long creatorId,
 		String creatorName,
 		String lectureStatus,
+		int capacity,
 		long enrolledCount,
 		long waitingCount,
 		String myEnrollmentStatus,
