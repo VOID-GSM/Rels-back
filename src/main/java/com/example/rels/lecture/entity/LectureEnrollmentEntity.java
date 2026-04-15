@@ -41,6 +41,9 @@ public class LectureEnrollmentEntity {
 	@Column(nullable = false)
 	private EnrollmentStatus status;
 
+	@Column(name = "grade", nullable = false)
+	private int grade;
+
 	@CreationTimestamp
 	@Column(name = "requested_at", nullable = false, updatable = false)
 	private LocalDateTime requestedAt;
@@ -48,9 +51,10 @@ public class LectureEnrollmentEntity {
 	protected LectureEnrollmentEntity() {
 	}
 
-	public LectureEnrollmentEntity(LectureEntity lecture, UserEntity user, EnrollmentStatus status) {
+	public LectureEnrollmentEntity(LectureEntity lecture, UserEntity user, int grade, EnrollmentStatus status) {
 		this.lecture = lecture;
 		this.user = user;
+		this.grade = grade;
 		this.status = status;
 	}
 
@@ -68,6 +72,10 @@ public class LectureEnrollmentEntity {
 
 	public EnrollmentStatus getStatus() {
 		return status;
+	}
+
+	public int getGrade() {
+		return grade;
 	}
 
 	public LocalDateTime getRequestedAt() {
