@@ -3,6 +3,7 @@ package com.example.rels.lecture.dto;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Map;
 
 public record LectureSummaryResponse(
 		Long lectureId,
@@ -11,7 +12,7 @@ public record LectureSummaryResponse(
 		Long creatorId,
 		String creatorName,
 		String lectureStatus,
-		int capacity,
+		Map<Integer, Integer> gradeCapacities,
 		long enrolledCount,
 		long waitingCount,
 		String lectureLocation,
