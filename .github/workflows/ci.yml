@@ -1,8 +1,8 @@
-name: CI/CD
+name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ develop ]
   pull_request:
     branches: [ main, develop ]
 
@@ -35,21 +35,3 @@ jobs:
 
       - name: Run tests
         run: ./gradlew test --no-daemon
-
-  deploy:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
-    steps:
-      - name: Deploy to server via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            cd ${{ secrets.SERVER_DEPLOY_PATH }}
-            git pull origin main
-            docker compose up --build -d
-            docker image prune -f
