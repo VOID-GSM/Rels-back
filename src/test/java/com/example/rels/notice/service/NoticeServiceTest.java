@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import com.example.rels.domain.notice.service.NoticeService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,15 +23,15 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.example.rels.auth.domain.user.entity.Role;
-import com.example.rels.auth.domain.user.entity.UserEntity;
-import com.example.rels.auth.domain.user.repository.UserRepository;
-import com.example.rels.notice.dto.NoticeCreateRequest;
-import com.example.rels.notice.dto.NoticeDetailResponse;
-import com.example.rels.notice.dto.NoticeSummaryResponse;
-import com.example.rels.notice.dto.NoticeUpdateRequest;
-import com.example.rels.notice.entity.NoticeEntity;
-import com.example.rels.notice.repository.NoticeRepository;
+import com.example.rels.domain.user.entity.Role;
+import com.example.rels.domain.user.entity.UserEntity;
+import com.example.rels.domain.user.repository.UserRepository;
+import com.example.rels.domain.notice.dto.NoticeCreateRequest;
+import com.example.rels.domain.notice.dto.NoticeDetailResponse;
+import com.example.rels.domain.notice.dto.NoticeSummaryResponse;
+import com.example.rels.domain.notice.dto.NoticeUpdateRequest;
+import com.example.rels.domain.notice.entity.NoticeEntity;
+import com.example.rels.domain.notice.repository.NoticeRepository;
 
 @ExtendWith(MockitoExtension.class)
 class NoticeServiceTest {

@@ -11,6 +11,7 @@ import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Optional;
 
+import com.example.rels.domain.lecture.service.LectureService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -23,18 +24,18 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.example.rels.auth.domain.user.entity.Role;
-import com.example.rels.auth.domain.user.entity.UserEntity;
-import com.example.rels.auth.domain.user.repository.UserRepository;
-import com.example.rels.lecture.dto.EnrollmentResponse;
-import com.example.rels.lecture.dto.LectureSummaryResponse;
-import com.example.rels.lecture.entity.EnrollmentStatus;
-import com.example.rels.lecture.entity.LectureEnrollmentEntity;
-import com.example.rels.lecture.entity.LectureEntity;
-import com.example.rels.lecture.entity.LectureStatus;
-import com.example.rels.lecture.repository.LectureEnrollmentCountProjection;
-import com.example.rels.lecture.repository.LectureEnrollmentRepository;
-import com.example.rels.lecture.repository.LectureRepository;
+import com.example.rels.domain.user.entity.Role;
+import com.example.rels.domain.user.entity.UserEntity;
+import com.example.rels.domain.user.repository.UserRepository;
+import com.example.rels.domain.lecture.dto.EnrollmentResponse;
+import com.example.rels.domain.lecture.dto.LectureSummaryResponse;
+import com.example.rels.domain.lecture.entity.EnrollmentStatus;
+import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
+import com.example.rels.domain.lecture.entity.LectureEntity;
+import com.example.rels.domain.lecture.entity.LectureStatus;
+import com.example.rels.domain.lecture.repository.LectureEnrollmentCountProjection;
+import com.example.rels.domain.lecture.repository.LectureEnrollmentRepository;
+import com.example.rels.domain.lecture.repository.LectureRepository;
 
 @ExtendWith(MockitoExtension.class)
 class LectureServiceTest {

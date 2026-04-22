@@ -1,0 +1,15 @@
+package com.example.rels.domain.lecture.dto;
+
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import java.util.Map;
+
+
+public record LectureCreateRequest(
+		@NotBlank @Size(max = 120) String title,
+		@NotBlank @Size(max = 5000) String description,
+		Map<Integer, Integer> capacityByGrade
+) {
+}
+
