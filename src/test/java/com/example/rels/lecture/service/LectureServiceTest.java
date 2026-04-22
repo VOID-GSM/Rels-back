@@ -62,8 +62,8 @@ class LectureServiceTest {
 		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
 		setId(creator);
 
-		LectureEntity firstLecture = new LectureEntity("title1", "description1", creator, "장소1", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1));
-		LectureEntity secondLecture = new LectureEntity("title2", "description2", creator, "장소2", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1));
+		LectureEntity firstLecture = new LectureEntity("title1", "description1", creator, "장소1", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
+		LectureEntity secondLecture = new LectureEntity("title2", "description2", creator, "장소2", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(firstLecture, 11L);
 		setId(secondLecture, 12L);
 
@@ -97,7 +97,7 @@ class LectureServiceTest {
 
 	@Test
 	void enrollConfirmsLectureAtThreshold() {
-		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1));
+		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
 		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
@@ -123,7 +123,7 @@ class LectureServiceTest {
 
 	@Test
 	void enrollMovesToWaitingAfterCapacity() {
-		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1));
+		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
 		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
@@ -147,7 +147,7 @@ class LectureServiceTest {
 
 	@Test
 	void cancelPromotesFirstWaitingUser() {
-		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1));
+		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(lecture, 1L);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 		UserEntity waitingUser = new UserEntity("wait@test.com", "wait", "1000000002", Role.USER);

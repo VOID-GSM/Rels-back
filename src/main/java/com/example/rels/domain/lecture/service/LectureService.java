@@ -47,6 +47,9 @@ public class LectureService {
 
 	@Transactional
 	   public LectureDetailResponse createLecture(Long userId, LectureCreateRequest request) {
+    if (request.capacityByGrade() != null && !request.capacityByGrade().isEmpty() && request.totalCapacity() != null && request.totalCapacity() > 0) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원과 전체 정원은 동시에 설정할 수 없습니다.");
+    }
     UserEntity creator = requireUser(userId);
     LectureEntity lecture = new LectureEntity(
         request.title(),
@@ -55,7 +58,8 @@ public class LectureService {
         request.lectureLocation(),
         request.lectureDate(),
         request.lectureTime(),
-        request.applicationDeadline()
+        request.applicationDeadline(),
+        request.totalCapacity()
     );
     lecture.setCapacityByGrade(request.capacityByGrade());
     lecture = lectureRepository.save(lecture);
@@ -78,12 +82,16 @@ public class LectureService {
 
 	@Transactional
 	   public LectureDetailResponse updateLecture(Long lectureId, Long userId, LectureUpdateRequest request) {
+    if (request.capacityByGrade() != null && !request.capacityByGrade().isEmpty() && request.totalCapacity() != null && request.totalCapacity() > 0) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원과 전체 정원은 동시에 설정할 수 없습니다.");
+    }
     LectureEntity lecture = requireLecture(lectureId);
     validateCreator(lecture, userId);
     lecture.updateAllDetails(
         request.title(),
         request.description(),
         request.capacityByGrade(),
+        request.totalCapacity(),
         request.lectureLocation(),
         request.lectureDate(),
         request.lectureTime(),
@@ -116,6 +124,7 @@ public class LectureService {
 
 		Integer userGrade = extractGradeFromStudentNumber(user.getStudentNumber());
 		Map<Integer, Integer> capacityByGrade = lecture.getCapacityByGrade();
+		Integer totalCapacity = lecture.getTotalCapacity();
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
 
@@ -130,8 +139,10 @@ public class LectureService {
 				})
 				.count();
 			isFull = gradeEnrolled >= capacityByGrade.get(userGrade);
+		} else if (totalCapacity != null && totalCapacity > 0) {
+			isFull = enrolledCount >= totalCapacity;
 		} else {
-			isFull = enrolledCount >= MAX_CAPACITY;
+			isFull = false; // 무제한
 		}
 
 		EnrollmentStatus status = isFull ? EnrollmentStatus.WAITING : EnrollmentStatus.ENROLLED;
@@ -292,5 +303,4 @@ public class LectureService {
 		}
 	}
 }
-
 

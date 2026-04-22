@@ -15,6 +15,7 @@ public record LectureUpdateRequest(
 	@NotBlank @Size(max = 120) String title,
 	@NotBlank @Size(max = 5000) String description,
 	Map<Integer, Integer> capacityByGrade,
+	Integer totalCapacity,
 	@NotBlank @Size(max = 255) String lectureLocation,
 	@NotNull LocalDate lectureDate,
 	@NotNull LocalTime lectureTime,

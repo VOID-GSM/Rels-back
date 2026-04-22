@@ -66,6 +66,9 @@ public class LectureEntity {
 	@Column(name = "application_deadline", nullable = false)
 	private LocalDateTime applicationDeadline;
 
+	@Column(name = "total_capacity")
+	private Integer totalCapacity;
+
 	@CreationTimestamp
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
@@ -77,7 +80,7 @@ public class LectureEntity {
 	protected LectureEntity() {
 	}
 
-	public LectureEntity(String title, String description, UserEntity creator, String lectureLocation, LocalDate lectureDate, LocalTime lectureTime, LocalDateTime applicationDeadline) {
+	public LectureEntity(String title, String description, UserEntity creator, String lectureLocation, LocalDate lectureDate, LocalTime lectureTime, LocalDateTime applicationDeadline, Integer totalCapacity) {
 		this.title = title;
 		this.description = description;
 		this.creator = creator;
@@ -87,10 +90,11 @@ public class LectureEntity {
 		this.lectureDate = lectureDate;
 		this.lectureTime = lectureTime;
 		this.applicationDeadline = applicationDeadline;
+		this.totalCapacity = totalCapacity;
 	}
 
 	public LectureEntity(String title, String description, UserEntity creator) {
-		this(title, description, creator, null, null, null, null);
+		this(title, description, creator, null, null, null, null, null);
 	}
 
 	public Map<Integer, Integer> getCapacityByGrade() {
@@ -145,6 +149,10 @@ public class LectureEntity {
 		return applicationDeadline;
 	}
 
+	public Integer getTotalCapacity() {
+		return totalCapacity;
+	}
+
 	public void updateBasicInfo(String title, String description) {
 		this.title = title;
 		this.description = description;
@@ -154,10 +162,11 @@ public class LectureEntity {
 		this.status = LectureStatus.CONFIRMED;
 	}
 
-	public void updateAllDetails(String title, String description, Map<Integer, Integer> capacityByGrade, String lectureLocation, LocalDate lectureDate, LocalTime lectureTime, LocalDateTime applicationDeadline) {
+	public void updateAllDetails(String title, String description, Map<Integer, Integer> capacityByGrade, Integer totalCapacity, String lectureLocation, LocalDate lectureDate, LocalTime lectureTime, LocalDateTime applicationDeadline) {
 		this.title = title;
 		this.description = description;
 		setCapacityByGrade(capacityByGrade);
+		this.totalCapacity = totalCapacity;
 		this.lectureLocation = lectureLocation;
 		this.lectureDate = lectureDate;
 		this.lectureTime = lectureTime;
