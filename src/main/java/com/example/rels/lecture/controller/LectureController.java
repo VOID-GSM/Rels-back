@@ -80,7 +80,7 @@ public class LectureController {
 		return ResponseEntity.noContent().build();
 	}
 
-	@PostMapping("/{lectureId}/enrollments") /
+	@PostMapping("/{lectureId}/enrollments")
 	public EnrollmentResponse enroll(
 			@PathVariable Long lectureId,
 			@AuthenticationPrincipal AuthenticatedUser currentUser) {
@@ -88,7 +88,7 @@ public class LectureController {
 		return lectureService.enroll(lectureId, authenticatedUser.userId());
 	}
 
-	@DeleteMapping("/{lectureId}/enrollments") //신청 취소
+	@DeleteMapping("/{lectureId}/enrollments")
 	public EnrollmentResponse cancelEnrollment(
 			@PathVariable Long lectureId,
 			@AuthenticationPrincipal AuthenticatedUser currentUser) {
