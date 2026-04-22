@@ -20,7 +20,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.example.rels.global.security.AuthenticatedUser;
 import com.example.rels.domain.lecture.dto.EnrollmentResponse;
-import com.example.rels.domain.lecture.dto.LectureAdminDetailsRequest;
 import com.example.rels.domain.lecture.dto.LectureCreateRequest;
 import com.example.rels.domain.lecture.dto.LectureDetailResponse;
 import com.example.rels.domain.lecture.dto.LectureSummaryResponse;
@@ -39,14 +38,14 @@ public class LectureController {
 		this.lectureService = lectureService;
 	}
 
-	@PostMapping
-	public ResponseEntity<LectureDetailResponse> createLecture(
-			@AuthenticationPrincipal AuthenticatedUser currentUser,
-			@Valid @RequestBody LectureCreateRequest request) {
-		AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		LectureDetailResponse response = lectureService.createLecture(authenticatedUser.userId(), request);
-		return ResponseEntity.status(HttpStatus.CREATED).body(response);
-	}
+	   @PostMapping
+	   public ResponseEntity<LectureDetailResponse> createLecture(
+			   @AuthenticationPrincipal AuthenticatedUser currentUser,
+			   @Valid @RequestBody LectureCreateRequest request) {
+		   AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		   LectureDetailResponse response = lectureService.createLecture(authenticatedUser.userId(), request);
+		   return ResponseEntity.status(HttpStatus.CREATED).body(response);
+	   }
 
 	@GetMapping
 	public Page<LectureSummaryResponse> getLectures(
@@ -62,14 +61,14 @@ public class LectureController {
 		return lectureService.getLectureDetail(lectureId, authenticatedUser.userId());
 	}
 
-	@PatchMapping("/{lectureId}")
-	public LectureDetailResponse updateLecture(
-			@PathVariable Long lectureId,
-			@AuthenticationPrincipal AuthenticatedUser currentUser,
-			@Valid @RequestBody LectureUpdateRequest request) {
-		AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		return lectureService.updateLecture(lectureId, authenticatedUser.userId(), request);
-	}
+	   @PatchMapping("/{lectureId}")
+	   public LectureDetailResponse updateLecture(
+			   @PathVariable Long lectureId,
+			   @AuthenticationPrincipal AuthenticatedUser currentUser,
+			   @Valid @RequestBody LectureUpdateRequest request) {
+		   AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		   return lectureService.updateLecture(lectureId, authenticatedUser.userId(), request);
+	   }
 
 	@DeleteMapping("/{lectureId}")
 	public ResponseEntity<Void> deleteLecture(
@@ -96,15 +95,7 @@ public class LectureController {
 		return lectureService.cancelEnrollment(lectureId, authenticatedUser.userId());
 	}
 
-	@PatchMapping("/{lectureId}/admin-details")
-	@PreAuthorize("hasRole('ADMIN')")
-	public LectureDetailResponse updateAdminDetails(
-			@PathVariable Long lectureId,
-			@AuthenticationPrincipal AuthenticatedUser currentUser,
-			@Valid @RequestBody LectureAdminDetailsRequest request) {
-		AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		return lectureService.updateAdminDetails(lectureId, authenticatedUser.userId(), request);
-	}
+
 
 	private AuthenticatedUser requireUser(AuthenticatedUser currentUser) {
 		if (currentUser == null) {

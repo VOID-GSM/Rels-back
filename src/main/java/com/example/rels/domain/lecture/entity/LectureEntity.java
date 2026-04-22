@@ -74,12 +74,19 @@ public class LectureEntity {
 	protected LectureEntity() {
 	}
 
-	public LectureEntity(String title, String description, UserEntity creator) {
+	public LectureEntity(String title, String description, UserEntity creator, String lectureLocation, LocalDate lectureDate, LocalTime lectureTime) {
 		this.title = title;
 		this.description = description;
 		this.creator = creator;
 		this.status = LectureStatus.OPEN;
 		this.capacityByGrade = new HashMap<>();
+		this.lectureLocation = lectureLocation;
+		this.lectureDate = lectureDate;
+		this.lectureTime = lectureTime;
+	}
+
+	public LectureEntity(String title, String description, UserEntity creator) {
+		this(title, description, creator, null, null, null);
 	}
 
 	public Map<Integer, Integer> getCapacityByGrade() {
@@ -139,9 +146,12 @@ public class LectureEntity {
 		this.status = LectureStatus.CONFIRMED;
 	}
 
-	public void updateAdminDetails(String lectureLocation, LocalDate lectureDate, LocalTime lectureTime) {
-		this.lectureLocation = lectureLocation;
-		this.lectureDate = lectureDate;
-		this.lectureTime = lectureTime;
-	}
+	   public void updateAllDetails(String title, String description, Map<Integer, Integer> capacityByGrade, String lectureLocation, LocalDate lectureDate, LocalTime lectureTime) {
+		   this.title = title;
+		   this.description = description;
+		   setCapacityByGrade(capacityByGrade);
+		   this.lectureLocation = lectureLocation;
+		   this.lectureDate = lectureDate;
+		   this.lectureTime = lectureTime;
+	   }
 }

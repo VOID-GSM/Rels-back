@@ -14,7 +14,6 @@ import org.springframework.web.server.ResponseStatusException;
 import com.example.rels.domain.user.entity.UserEntity;
 import com.example.rels.domain.user.repository.UserRepository;
 import com.example.rels.domain.lecture.dto.EnrollmentResponse;
-import com.example.rels.domain.lecture.dto.LectureAdminDetailsRequest;
 import com.example.rels.domain.lecture.dto.LectureCreateRequest;
 import com.example.rels.domain.lecture.dto.LectureDetailResponse;
 import com.example.rels.domain.lecture.dto.LectureSummaryResponse;
@@ -46,13 +45,20 @@ public class LectureService {
 	}
 
 	@Transactional
-	public LectureDetailResponse createLecture(Long userId, LectureCreateRequest request) {
-		UserEntity creator = requireUser(userId);
-		LectureEntity lecture = new LectureEntity(request.title(), request.description(), creator);
-		lecture.setCapacityByGrade(request.capacityByGrade());
-		lecture = lectureRepository.save(lecture);
-		return toLectureDetail(lecture, userId);
-	}
+	   public LectureDetailResponse createLecture(Long userId, LectureCreateRequest request) {
+		   UserEntity creator = requireUser(userId);
+		   LectureEntity lecture = new LectureEntity(
+			   request.title(),
+			   request.description(),
+			   creator,
+			   request.lectureLocation(),
+			   request.lectureDate(),
+			   request.lectureTime()
+		   );
+		   lecture.setCapacityByGrade(request.capacityByGrade());
+		   lecture = lectureRepository.save(lecture);
+		   return toLectureDetail(lecture, userId);
+	   }
 
 	@Transactional(readOnly = true)
 	public Page<LectureSummaryResponse> getLectures(Pageable pageable) {
@@ -69,13 +75,19 @@ public class LectureService {
 	}
 
 	@Transactional
-	public LectureDetailResponse updateLecture(Long lectureId, Long userId, LectureUpdateRequest request) {
-		LectureEntity lecture = requireLecture(lectureId);
-		validateCreator(lecture, userId);
-		lecture.updateBasicInfo(request.title(), request.description());
-		lecture.setCapacityByGrade(request.capacityByGrade());
-		return toLectureDetail(lecture, userId);
-	}
+	   public LectureDetailResponse updateLecture(Long lectureId, Long userId, LectureUpdateRequest request) {
+		   LectureEntity lecture = requireLecture(lectureId);
+		   validateCreator(lecture, userId);
+		   lecture.updateAllDetails(
+			   request.title(),
+			   request.description(),
+			   request.capacityByGrade(),
+			   request.lectureLocation(),
+			   request.lectureDate(),
+			   request.lectureTime()
+		   );
+		   return toLectureDetail(lecture, userId);
+	   }
 
 	@Transactional
 	public void deleteLecture(Long lectureId, Long userId) {
@@ -84,18 +96,7 @@ public class LectureService {
 		lectureRepository.delete(lecture);
 	}
 
-	@Transactional
-	public LectureDetailResponse updateAdminDetails(Long lectureId, Long userId,
-			LectureAdminDetailsRequest request) {
 
-		LectureEntity lecture = requireLecture(lectureId);
-		if (lecture.getStatus() != LectureStatus.CONFIRMED) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "강의가 확정된 후에만 세부 정보를 설정할 수 있습니다.");
-		}
-
-		lecture.updateAdminDetails(request.lectureLocation(), request.lectureDate(), request.lectureTime());
-		return toLectureDetail(lecture, userId);
-	}
 
 	@Transactional
 	public EnrollmentResponse enroll(Long lectureId, Long userId) {
