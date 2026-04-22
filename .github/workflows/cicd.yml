@@ -1,11 +1,13 @@
-name: CD
+name: CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -34,6 +36,12 @@ jobs:
       - name: Run tests
         run: ./gradlew test --no-daemon
 
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
       - name: Deploy to server via SSH
         uses: appleboy/ssh-action@v1
         with:
