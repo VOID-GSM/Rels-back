@@ -1,4 +1,11 @@
+
 package com.example.rels.lecture.entity;
+
+import java.util.HashMap;
+import java.util.Map;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.MapKeyColumn;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -24,6 +31,11 @@ import jakarta.persistence.Table;
 @Entity
 @Table(name = "lectures")
 public class LectureEntity {
+	@ElementCollection
+	@CollectionTable(name = "lecture_capacity_by_grade", joinColumns = @JoinColumn(name = "lecture_id"))
+	@MapKeyColumn(name = "grade")
+	@Column(name = "capacity")
+	private Map<Integer, Integer> capacityByGrade = new HashMap<>();
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -68,6 +80,15 @@ public class LectureEntity {
 		this.description = description;
 		this.creator = creator;
 		this.status = LectureStatus.OPEN;
+		this.capacityByGrade = new HashMap<>();
+	}
+
+	public Map<Integer, Integer> getCapacityByGrade() {
+		return capacityByGrade;
+	}
+
+	public void setCapacityByGrade(Map<Integer, Integer> capacityByGrade) {
+		this.capacityByGrade = capacityByGrade;
 	}
 
 	public Long getId() {

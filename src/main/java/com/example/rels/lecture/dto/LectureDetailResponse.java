@@ -1,8 +1,11 @@
 package com.example.rels.lecture.dto;
 
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Map;
+
 
 public record LectureDetailResponse(
 		Long lectureId,
@@ -17,6 +20,8 @@ public record LectureDetailResponse(
 		String lectureLocation,
 		LocalDate lectureDate,
 		LocalTime lectureTime,
-		LocalDateTime createdAt) {
+		LocalDateTime createdAt,
+		Map<Integer, Integer> capacityByGrade
+) {
 }
 

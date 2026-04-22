@@ -48,7 +48,9 @@ public class LectureService {
 	@Transactional
 	public LectureDetailResponse createLecture(Long userId, LectureCreateRequest request) {
 		UserEntity creator = requireUser(userId);
-		LectureEntity lecture = lectureRepository.save(new LectureEntity(request.title(), request.description(), creator));
+		LectureEntity lecture = new LectureEntity(request.title(), request.description(), creator);
+		lecture.setCapacityByGrade(request.capacityByGrade());
+		lecture = lectureRepository.save(lecture);
 		return toLectureDetail(lecture, userId);
 	}
 
@@ -71,6 +73,7 @@ public class LectureService {
 		LectureEntity lecture = requireLecture(lectureId);
 		validateCreator(lecture, userId);
 		lecture.updateBasicInfo(request.title(), request.description());
+		lecture.setCapacityByGrade(request.capacityByGrade());
 		return toLectureDetail(lecture, userId);
 	}
 
@@ -163,7 +166,9 @@ public class LectureService {
 				lecture.getLectureLocation(),
 				lecture.getLectureDate(),
 				lecture.getLectureTime(),
-				lecture.getCreatedAt());
+				lecture.getCreatedAt(),
+				lecture.getCapacityByGrade() // 추가: 학년별 정원
+		);
 	}
 
 	private Map<Long, Map<EnrollmentStatus, Long>> getEnrollmentCountsByLectureIds(List<LectureEntity> lectures) {
@@ -210,7 +215,8 @@ public class LectureService {
 				lecture.getLectureLocation(),
 				lecture.getLectureDate(),
 				lecture.getLectureTime(),
-				lecture.getCreatedAt());
+				lecture.getCreatedAt(),
+				lecture.getCapacityByGrade());
 	}
 
 	private UserEntity requireUser(Long userId) {

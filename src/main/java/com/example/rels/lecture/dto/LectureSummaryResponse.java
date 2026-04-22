@@ -3,6 +3,7 @@ package com.example.rels.lecture.dto;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Map;
 
 public record LectureSummaryResponse(
 		Long lectureId,
@@ -16,6 +17,7 @@ public record LectureSummaryResponse(
 		String lectureLocation,
 		LocalDate lectureDate,
 		LocalTime lectureTime,
-		LocalDateTime createdAt) {
+		LocalDateTime createdAt,
+		Map<Integer, Integer> capacityByGrade // 추가: 학년별 정원
+) {
 }
-
