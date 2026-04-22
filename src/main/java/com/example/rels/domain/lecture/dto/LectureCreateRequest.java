@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Map;
 
@@ -16,7 +17,7 @@ public record LectureCreateRequest(
 	Map<Integer, Integer> capacityByGrade,
 	@NotBlank @Size(max = 255) String lectureLocation,
 	@NotNull LocalDate lectureDate,
-	@NotNull LocalTime lectureTime
+	@NotNull LocalTime lectureTime,
+	@NotNull LocalDateTime applicationDeadline
 ) {
 }
-

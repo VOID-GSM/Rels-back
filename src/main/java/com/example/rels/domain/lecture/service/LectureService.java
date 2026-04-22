@@ -1,5 +1,6 @@
 package com.example.rels.domain.lecture.service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -46,18 +47,19 @@ public class LectureService {
 
 	@Transactional
 	   public LectureDetailResponse createLecture(Long userId, LectureCreateRequest request) {
-		   UserEntity creator = requireUser(userId);
-		   LectureEntity lecture = new LectureEntity(
-			   request.title(),
-			   request.description(),
-			   creator,
-			   request.lectureLocation(),
-			   request.lectureDate(),
-			   request.lectureTime()
-		   );
-		   lecture.setCapacityByGrade(request.capacityByGrade());
-		   lecture = lectureRepository.save(lecture);
-		   return toLectureDetail(lecture, userId);
+    UserEntity creator = requireUser(userId);
+    LectureEntity lecture = new LectureEntity(
+        request.title(),
+        request.description(),
+        creator,
+        request.lectureLocation(),
+        request.lectureDate(),
+        request.lectureTime(),
+        request.applicationDeadline()
+    );
+    lecture.setCapacityByGrade(request.capacityByGrade());
+    lecture = lectureRepository.save(lecture);
+    return toLectureDetail(lecture, userId);
 	   }
 
 	@Transactional(readOnly = true)
@@ -76,17 +78,18 @@ public class LectureService {
 
 	@Transactional
 	   public LectureDetailResponse updateLecture(Long lectureId, Long userId, LectureUpdateRequest request) {
-		   LectureEntity lecture = requireLecture(lectureId);
-		   validateCreator(lecture, userId);
-		   lecture.updateAllDetails(
-			   request.title(),
-			   request.description(),
-			   request.capacityByGrade(),
-			   request.lectureLocation(),
-			   request.lectureDate(),
-			   request.lectureTime()
-		   );
-		   return toLectureDetail(lecture, userId);
+    LectureEntity lecture = requireLecture(lectureId);
+    validateCreator(lecture, userId);
+    lecture.updateAllDetails(
+        request.title(),
+        request.description(),
+        request.capacityByGrade(),
+        request.lectureLocation(),
+        request.lectureDate(),
+        request.lectureTime(),
+        request.applicationDeadline()
+    );
+    return toLectureDetail(lecture, userId);
 	   }
 
 	@Transactional
@@ -101,6 +104,9 @@ public class LectureService {
 	@Transactional
 	public EnrollmentResponse enroll(Long lectureId, Long userId) {
 		LectureEntity lecture = requireLectureForUpdate(lectureId);
+		if (LocalDateTime.now().isAfter(lecture.getApplicationDeadline())) {
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "신청 마감일이 지났습니다.");
+		}
 		UserEntity user = requireUser(userId);
 
 		lectureEnrollmentRepository.findByLectureIdAndUserId(lectureId, userId)
@@ -266,5 +272,25 @@ public class LectureService {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "강의 작성자만 수정 또는 삭제할 수 있습니다.");
 		}
 	}
+
+	/**
+	 * Checks all lectures and sets status to UNCONFIRMED if deadline passed and not enough enrolled.
+	 * Should be called by a scheduler after deadlines.
+	 */
+	@Transactional
+	public void setUnconfirmedIfDeadlinePassed() {
+		List<LectureEntity> lectures = lectureRepository.findAll();
+		for (LectureEntity lecture : lectures) {
+			if (lecture.getStatus() == LectureStatus.OPEN &&
+				lecture.getApplicationDeadline() != null &&
+				LocalDateTime.now().isAfter(lecture.getApplicationDeadline())) {
+				long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.ENROLLED);
+				if (enrolledCount < CONFIRM_THRESHOLD) {
+					lecture.setStatus(LectureStatus.UNCONFIRMED);
+				}
+			}
+		}
+	}
 }
+
 
