@@ -107,10 +107,27 @@ public class LectureService {
 					throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 신청한 강의입니다.");
 				});
 
+		Integer userGrade = extractGradeFromStudentNumber(user.getStudentNumber());
+		Map<Integer, Integer> capacityByGrade = lecture.getCapacityByGrade();
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
 
-		EnrollmentStatus status = enrolledCount >= MAX_CAPACITY ? EnrollmentStatus.WAITING : EnrollmentStatus.ENROLLED;
+		boolean useGradeCapacity = capacityByGrade != null && !capacityByGrade.isEmpty() && userGrade != null && capacityByGrade.containsKey(userGrade);
+		boolean isFull = false;
+		if (useGradeCapacity) {
+			long gradeEnrolled = lectureEnrollmentRepository.findAllByLectureId(lectureId).stream()
+				.filter(e -> e.getStatus() == EnrollmentStatus.ENROLLED)
+				.filter(e -> {
+					Integer grade = extractGradeFromStudentNumber(e.getUser().getStudentNumber());
+					return grade != null && grade.equals(userGrade);
+				})
+				.count();
+			isFull = gradeEnrolled >= capacityByGrade.get(userGrade);
+		} else {
+			isFull = enrolledCount >= MAX_CAPACITY;
+		}
+
+		EnrollmentStatus status = isFull ? EnrollmentStatus.WAITING : EnrollmentStatus.ENROLLED;
 		lectureEnrollmentRepository.save(new LectureEnrollmentEntity(lecture, user, status));
 
 		if (status == EnrollmentStatus.ENROLLED && lecture.getStatus() == LectureStatus.OPEN
@@ -122,6 +139,15 @@ public class LectureService {
 		long nextWaitingCount = status == EnrollmentStatus.WAITING ? waitingCount + 1 : waitingCount;
 
 		return new EnrollmentResponse(lectureId, status.name(), nextEnrolledCount, nextWaitingCount);
+	}
+
+	private Integer extractGradeFromStudentNumber(String studentNumber) {
+		if (studentNumber == null || studentNumber.isEmpty()) return null;
+		try {
+			return Integer.parseInt(studentNumber.substring(1, 2));
+		} catch (Exception e) {
+			return null;
+		}
 	}
 
 	@Transactional
@@ -167,7 +193,7 @@ public class LectureService {
 				lecture.getLectureDate(),
 				lecture.getLectureTime(),
 				lecture.getCreatedAt(),
-				lecture.getCapacityByGrade() // 추가: 학년별 정원
+				lecture.getCapacityByGrade()
 		);
 	}
 

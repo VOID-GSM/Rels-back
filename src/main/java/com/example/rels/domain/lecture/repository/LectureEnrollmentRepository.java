@@ -26,5 +26,6 @@ public interface LectureEnrollmentRepository extends JpaRepository<LectureEnroll
 
 	Optional<LectureEnrollmentEntity> findFirstByLectureIdAndStatusOrderByRequestedAtAscIdAsc(Long lectureId,
 			EnrollmentStatus status);
-}
 
+	List<LectureEnrollmentEntity> findAllByLectureId(Long lectureId);
+}

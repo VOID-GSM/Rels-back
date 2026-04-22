@@ -1,4 +1,3 @@
-
 package com.example.rels.domain.lecture.entity;
 
 import java.util.HashMap;
@@ -88,7 +87,11 @@ public class LectureEntity {
 	}
 
 	public void setCapacityByGrade(Map<Integer, Integer> capacityByGrade) {
-		this.capacityByGrade = capacityByGrade;
+		if (capacityByGrade == null) {
+			this.capacityByGrade = new HashMap<>();
+		} else {
+			this.capacityByGrade = capacityByGrade;
+		}
 	}
 
 	public Long getId() {
@@ -142,4 +145,3 @@ public class LectureEntity {
 		this.lectureTime = lectureTime;
 	}
 }
-
