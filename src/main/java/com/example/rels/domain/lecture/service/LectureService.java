@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.example.rels.domain.lecture.dto.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -14,11 +15,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.example.rels.domain.user.entity.UserEntity;
 import com.example.rels.domain.user.repository.UserRepository;
-import com.example.rels.domain.lecture.dto.EnrollmentResponse;
-import com.example.rels.domain.lecture.dto.LectureCreateRequest;
-import com.example.rels.domain.lecture.dto.LectureDetailResponse;
-import com.example.rels.domain.lecture.dto.LectureSummaryResponse;
-import com.example.rels.domain.lecture.dto.LectureUpdateRequest;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
 import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
 import com.example.rels.domain.lecture.entity.LectureEntity;
@@ -287,10 +283,6 @@ public class LectureService {
 		}
 	}
 
-	/**
-	 * Checks all lectures and sets status to UNCONFIRMED if deadline passed and not enough enrolled.
-	 * Should be called by a scheduler after deadlines.
-	 */
 	@Transactional
 	public void setUnconfirmedIfDeadlinePassed() {
 		List<LectureEntity> lectures = lectureRepository.findAll();
@@ -304,6 +296,34 @@ public class LectureService {
 				}
 			}
 		}
+	}
+
+	@Transactional(readOnly = true)
+	public EnrollmentListResponse getEnrollments(Long lectureId) {
+		requireLecture(lectureId);
+
+		List<LectureEnrollmentEntity> allEnrollments = lectureEnrollmentRepository.findAllByLectureId(lectureId);
+
+		List<EnrollmentUserResponse> enrolled = allEnrollments.stream()
+				.filter(e -> e.getStatus() == EnrollmentStatus.ENROLLED)
+				.map(this::toEnrollmentUserResponse)
+				.toList();
+
+		List<EnrollmentUserResponse> waiting = allEnrollments.stream()
+				.filter(e -> e.getStatus() == EnrollmentStatus.WAITING)
+				.map(this::toEnrollmentUserResponse)
+				.toList();
+
+		return new EnrollmentListResponse(enrolled, waiting);
+	}
+
+	private EnrollmentUserResponse toEnrollmentUserResponse(LectureEnrollmentEntity enrollment) {
+		UserEntity user = enrollment.getUser();
+		return new EnrollmentUserResponse(
+				user.getId(),
+				user.getName(),
+				user.getStudentNumber()
+		);
 	}
 }
 
