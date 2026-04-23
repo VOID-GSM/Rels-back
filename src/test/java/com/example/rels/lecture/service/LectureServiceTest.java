@@ -10,7 +10,9 @@ import static org.mockito.Mockito.when;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
+import com.example.rels.domain.lecture.service.LectureService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -23,18 +25,18 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.example.rels.auth.domain.user.entity.Role;
-import com.example.rels.auth.domain.user.entity.UserEntity;
-import com.example.rels.auth.domain.user.repository.UserRepository;
-import com.example.rels.lecture.dto.EnrollmentResponse;
-import com.example.rels.lecture.dto.LectureSummaryResponse;
-import com.example.rels.lecture.entity.EnrollmentStatus;
-import com.example.rels.lecture.entity.LectureEnrollmentEntity;
-import com.example.rels.lecture.entity.LectureEntity;
-import com.example.rels.lecture.entity.LectureStatus;
-import com.example.rels.lecture.repository.LectureEnrollmentCountProjection;
-import com.example.rels.lecture.repository.LectureEnrollmentRepository;
-import com.example.rels.lecture.repository.LectureRepository;
+import com.example.rels.domain.user.entity.Role;
+import com.example.rels.domain.user.entity.UserEntity;
+import com.example.rels.domain.user.repository.UserRepository;
+import com.example.rels.domain.lecture.dto.EnrollmentResponse;
+import com.example.rels.domain.lecture.dto.LectureSummaryResponse;
+import com.example.rels.domain.lecture.entity.EnrollmentStatus;
+import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
+import com.example.rels.domain.lecture.entity.LectureEntity;
+import com.example.rels.domain.lecture.entity.LectureStatus;
+import com.example.rels.domain.lecture.repository.LectureEnrollmentCountProjection;
+import com.example.rels.domain.lecture.repository.LectureEnrollmentRepository;
+import com.example.rels.domain.lecture.repository.LectureRepository;
 
 @ExtendWith(MockitoExtension.class)
 class LectureServiceTest {
@@ -60,8 +62,8 @@ class LectureServiceTest {
 		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
 		setId(creator);
 
-		LectureEntity firstLecture = new LectureEntity("title1", "description1", creator);
-		LectureEntity secondLecture = new LectureEntity("title2", "description2", creator);
+		LectureEntity firstLecture = new LectureEntity("title1", "description1", creator, "장소1", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
+		LectureEntity secondLecture = new LectureEntity("title2", "description2", creator, "장소2", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(firstLecture, 11L);
 		setId(secondLecture, 12L);
 
@@ -95,7 +97,7 @@ class LectureServiceTest {
 
 	@Test
 	void enrollConfirmsLectureAtThreshold() {
-		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER));
+		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
 		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
@@ -121,7 +123,7 @@ class LectureServiceTest {
 
 	@Test
 	void enrollMovesToWaitingAfterCapacity() {
-		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER));
+		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
 		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
@@ -145,7 +147,7 @@ class LectureServiceTest {
 
 	@Test
 	void cancelPromotesFirstWaitingUser() {
-		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER));
+		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(lecture, 1L);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 		UserEntity waitingUser = new UserEntity("wait@test.com", "wait", "1000000002", Role.USER);
@@ -190,5 +192,4 @@ class LectureServiceTest {
 		}
 	}
 }
-
 
