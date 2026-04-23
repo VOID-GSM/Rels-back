@@ -211,7 +211,8 @@ public class LectureService {
 				lecture.getLectureDate(),
 				lecture.getLectureTime(),
 				lecture.getCreatedAt(),
-				lecture.getCapacityByGrade()
+				lecture.getCapacityByGrade(),
+				lecture.getTotalCapacity()
 		);
 	}
 
@@ -260,7 +261,9 @@ public class LectureService {
 				lecture.getLectureDate(),
 				lecture.getLectureTime(),
 				lecture.getCreatedAt(),
-				lecture.getCapacityByGrade());
+				lecture.getCapacityByGrade(),
+				lecture.getTotalCapacity()
+		);
 	}
 
 	private UserEntity requireUser(Long userId) {

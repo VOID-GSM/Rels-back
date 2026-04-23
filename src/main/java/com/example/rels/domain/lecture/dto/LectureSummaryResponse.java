@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Map;
 
+
 public record LectureSummaryResponse(
 		Long lectureId,
 		String title,
@@ -18,6 +19,7 @@ public record LectureSummaryResponse(
 		LocalDate lectureDate,
 		LocalTime lectureTime,
 		LocalDateTime createdAt,
-		Map<Integer, Integer> capacityByGrade // 추가: 학년별 정원
+		Map<Integer, Integer> capacityByGrade,
+		Integer totalCapacity
 ) {
 }

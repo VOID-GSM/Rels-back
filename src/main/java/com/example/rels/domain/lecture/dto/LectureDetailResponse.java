@@ -7,6 +7,7 @@ import java.time.LocalTime;
 import java.util.Map;
 
 
+
 public record LectureDetailResponse(
 		Long lectureId,
 		String title,
@@ -21,7 +22,8 @@ public record LectureDetailResponse(
 		LocalDate lectureDate,
 		LocalTime lectureTime,
 		LocalDateTime createdAt,
-		Map<Integer, Integer> capacityByGrade
+		Map<Integer, Integer> capacityByGrade,
+		Integer totalCapacity
 ) {
 }
 
