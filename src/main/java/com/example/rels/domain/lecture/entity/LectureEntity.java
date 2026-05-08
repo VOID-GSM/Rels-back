@@ -102,10 +102,12 @@ public class LectureEntity {
 	}
 
 	public void setCapacityByGrade(Map<Integer, Integer> capacityByGrade) {
-		if (capacityByGrade == null) {
+		if (this.capacityByGrade == null) {
 			this.capacityByGrade = new HashMap<>();
-		} else {
-			this.capacityByGrade = capacityByGrade;
+		}
+		this.capacityByGrade.clear();
+		if (capacityByGrade != null && !capacityByGrade.isEmpty()) {
+			this.capacityByGrade.putAll(capacityByGrade);
 		}
 	}
 
