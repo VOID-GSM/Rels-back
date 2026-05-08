@@ -27,7 +27,7 @@ import com.example.rels.domain.lecture.repository.LectureRepository;
 public class LectureService {
 
 	private static final long CONFIRM_THRESHOLD = 10;
-	private static final long MAX_CAPACITY = 30;
+
 
 	private final LectureRepository lectureRepository;
 	private final LectureEnrollmentRepository lectureEnrollmentRepository;
@@ -119,12 +119,13 @@ public class LectureService {
 				});
 
 		Integer userGrade = extractGradeFromStudentNumber(user.getStudentNumber());
-		Map<Integer, Integer> capacityByGrade = lecture.getCapacityByGrade();
+		// 방어적으로 내부 맵이 null일 수 있는 경우 빈 맵으로 대체
+		Map<Integer, Integer> capacityByGrade = lecture.getCapacityByGrade() == null ? Map.of() : lecture.getCapacityByGrade();
 		Integer totalCapacity = lecture.getTotalCapacity();
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
 
-		boolean useGradeCapacity = capacityByGrade != null && !capacityByGrade.isEmpty() && userGrade != null && capacityByGrade.containsKey(userGrade);
+		boolean useGradeCapacity = !capacityByGrade.isEmpty() && userGrade != null && capacityByGrade.containsKey(userGrade);
 		boolean isFull = false;
 		if (useGradeCapacity) {
 			long gradeEnrolled = lectureEnrollmentRepository.findAllByLectureId(lectureId).stream()

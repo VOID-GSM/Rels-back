@@ -98,7 +98,7 @@ public class LectureEntity {
 	}
 
 	public Map<Integer, Integer> getCapacityByGrade() {
-		return capacityByGrade;
+		return capacityByGrade == null ? Map.of() : capacityByGrade;
 	}
 
 	public void setCapacityByGrade(Map<Integer, Integer> capacityByGrade) {
