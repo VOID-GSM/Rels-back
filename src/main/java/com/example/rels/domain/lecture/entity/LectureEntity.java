@@ -151,6 +151,13 @@ public class LectureEntity {
 		return applicationDeadline;
 	}
 
+	public LocalDateTime getLectureEndDateTime() {
+		if (lectureDate == null || lectureTime == null) {
+			return null;
+		}
+		return lectureDate.atTime(lectureTime);
+	}
+
 	public Integer getTotalCapacity() {
 		return totalCapacity;
 	}
@@ -162,6 +169,10 @@ public class LectureEntity {
 
 	public void confirm() {
 		this.status = LectureStatus.CONFIRMED;
+	}
+
+	public void close() {
+		this.status = LectureStatus.CLOSE;
 	}
 
 	public void updateAllDetails(String title, String description, Map<Integer, Integer> capacityByGrade, Integer totalCapacity, String lectureLocation, LocalDate lectureDate, LocalTime lectureTime, LocalDateTime applicationDeadline) {

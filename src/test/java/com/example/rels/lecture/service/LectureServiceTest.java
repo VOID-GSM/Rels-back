@@ -3,16 +3,20 @@ package com.example.rels.lecture.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDate;
 import java.lang.reflect.Field;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import java.time.LocalDateTime;
 
 import com.example.rels.domain.lecture.service.LectureService;
+import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -29,6 +33,7 @@ import com.example.rels.domain.user.entity.Role;
 import com.example.rels.domain.user.entity.UserEntity;
 import com.example.rels.domain.user.repository.UserRepository;
 import com.example.rels.domain.lecture.dto.EnrollmentResponse;
+import com.example.rels.domain.lecture.dto.LectureDetailResponse;
 import com.example.rels.domain.lecture.dto.LectureSummaryResponse;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
 import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
@@ -96,8 +101,68 @@ class LectureServiceTest {
 	}
 
 	@Test
+	void getLecturesMarksEndedLectureAsClosed() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator);
+
+		LectureEntity endedLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().minusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
+		setId(endedLecture, 11L);
+
+		LectureEnrollmentCountProjection enrolledCount = org.mockito.Mockito.mock(LectureEnrollmentCountProjection.class);
+		when(enrolledCount.getLectureId()).thenReturn(11L);
+		when(enrolledCount.getStatus()).thenReturn(EnrollmentStatus.ENROLLED);
+		when(enrolledCount.getEnrollmentCount()).thenReturn(0L);
+
+		LectureEnrollmentCountProjection waitingCount = org.mockito.Mockito.mock(LectureEnrollmentCountProjection.class);
+		when(waitingCount.getLectureId()).thenReturn(11L);
+		when(waitingCount.getStatus()).thenReturn(EnrollmentStatus.WAITING);
+		when(waitingCount.getEnrollmentCount()).thenReturn(0L);
+
+		Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+		when(lectureRepository.findAllByOrderByCreatedAtDesc(pageable))
+				.thenReturn(new PageImpl<>(List.of(endedLecture), pageable, 1));
+		when(lectureEnrollmentRepository.countEnrollmentsByLectureIds(List.of(11L))).thenReturn(List.of(enrolledCount, waitingCount));
+
+		Page<LectureSummaryResponse> lectures = lectureService.getLectures(pageable);
+
+		assertEquals(LectureStatus.CLOSE.name(), lectures.getContent().get(0).lectureStatus());
+	}
+
+	@Test
+	void getLectureDetailMarksEndedLectureAsClosed() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator);
+
+		LectureEntity endedLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().minusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
+		setId(endedLecture, 11L);
+
+		when(lectureRepository.findById(11L)).thenReturn(Optional.of(endedLecture));
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.WAITING)).thenReturn(0L);
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(11L, 2L)).thenReturn(Optional.empty());
+
+		LectureDetailResponse response = lectureService.getLectureDetail(11L, 2L);
+
+		assertEquals(LectureStatus.CLOSE.name(), response.lectureStatus());
+		assertEquals(LectureStatus.CLOSE, endedLecture.getStatus());
+	}
+
+	@Test
+	void enrollRejectsEndedLecture() {
+		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", LocalDate.now().minusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
+		setId(lecture, 1L);
+
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+
+		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> lectureService.enroll(1L, 2L));
+
+		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+		assertEquals(LectureStatus.CLOSE, lecture.getStatus());
+	}
+
+	@Test
 	void enrollConfirmsLectureAtThreshold() {
-		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
+		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now().plusDays(1), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), 30);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
 		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
@@ -123,7 +188,7 @@ class LectureServiceTest {
 
 	@Test
 	void enrollMovesToWaitingAfterCapacity() {
-		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
+		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now().plusDays(1), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), 30);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
 		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));

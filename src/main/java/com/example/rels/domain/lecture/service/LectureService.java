@@ -9,6 +9,7 @@ import com.example.rels.domain.lecture.dto.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -27,7 +28,6 @@ import com.example.rels.domain.lecture.repository.LectureRepository;
 public class LectureService {
 
 	private static final long CONFIRM_THRESHOLD = 10;
-
 
 	private final LectureRepository lectureRepository;
 	private final LectureEnrollmentRepository lectureEnrollmentRepository;
@@ -108,6 +108,10 @@ public class LectureService {
 	@Transactional
 	public EnrollmentResponse enroll(Long lectureId, Long userId) {
 		LectureEntity lecture = requireLectureForUpdate(lectureId);
+		refreshLectureLifecycle(lecture, LocalDateTime.now());
+		if (lecture.getStatus() == LectureStatus.CLOSE) {
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "이미 종료된 강의입니다.");
+		}
 		if (LocalDateTime.now().isAfter(lecture.getApplicationDeadline())) {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "신청 마감일이 지났습니다.");
 		}
@@ -119,7 +123,6 @@ public class LectureService {
 				});
 
 		Integer userGrade = extractGradeFromStudentNumber(user.getStudentNumber());
-		// 방어적으로 내부 맵이 null일 수 있는 경우 빈 맵으로 대체
 		Map<Integer, Integer> capacityByGrade = lecture.getCapacityByGrade() == null ? Map.of() : lecture.getCapacityByGrade();
 		Integer totalCapacity = lecture.getTotalCapacity();
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
@@ -139,7 +142,7 @@ public class LectureService {
 		} else if (totalCapacity != null && totalCapacity > 0) {
 			isFull = enrolledCount >= totalCapacity;
 		} else {
-			isFull = false; // 무제한
+			isFull = false;
 		}
 
 		EnrollmentStatus status = isFull ? EnrollmentStatus.WAITING : EnrollmentStatus.ENROLLED;
@@ -193,6 +196,7 @@ public class LectureService {
 	private LectureSummaryResponse toLectureSummary(LectureEntity lecture,
 			Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId) {
 		long enrolledCount = getEnrollmentCount(enrollmentCountsByLectureId, lecture.getId(), EnrollmentStatus.ENROLLED);
+		refreshLectureLifecycle(lecture, LocalDateTime.now(), enrolledCount);
 		long waitingCount = getEnrollmentCount(enrollmentCountsByLectureId, lecture.getId(), EnrollmentStatus.WAITING);
 
 		return new LectureSummaryResponse(
@@ -237,6 +241,7 @@ public class LectureService {
 	}
 
 	private LectureDetailResponse toLectureDetail(LectureEntity lecture, Long userId) {
+		refreshLectureLifecycle(lecture, LocalDateTime.now());
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.ENROLLED);
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.WAITING);
 
@@ -284,18 +289,58 @@ public class LectureService {
 		}
 	}
 
+	@Scheduled(fixedDelayString = "${rels.lecture.lifecycle-sync-delay-ms:60000}")
+	@Transactional
+	public void syncLectureStatuses() {
+		syncLectureStatuses(LocalDateTime.now());
+	}
+
 	@Transactional
 	public void setUnconfirmedIfDeadlinePassed() {
+		syncLectureStatuses(LocalDateTime.now());
+	}
+
+	private void syncLectureStatuses(LocalDateTime now) {
 		List<LectureEntity> lectures = lectureRepository.findAll();
 		for (LectureEntity lecture : lectures) {
-			if (lecture.getStatus() == LectureStatus.OPEN &&
-				lecture.getApplicationDeadline() != null &&
-				LocalDateTime.now().isAfter(lecture.getApplicationDeadline())) {
-				long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.ENROLLED);
-				if (enrolledCount < CONFIRM_THRESHOLD) {
-					lecture.setStatus(LectureStatus.UNCONFIRMED);
-				}
+			refreshLectureLifecycle(lecture, now);
+		}
+	}
+
+	private void refreshLectureLifecycle(LectureEntity lecture, LocalDateTime now) {
+		if (lecture.getId() == null) {
+			LocalDateTime lectureEndDateTime = lecture.getLectureEndDateTime();
+			if (lecture.getStatus() != LectureStatus.CLOSE && lectureEndDateTime != null && now.isAfter(lectureEndDateTime)) {
+				lecture.close();
 			}
+			return;
+		}
+
+		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.ENROLLED);
+		refreshLectureLifecycle(lecture, now, enrolledCount);
+	}
+
+	private void refreshLectureLifecycle(LectureEntity lecture, LocalDateTime now, long enrolledCount) {
+		if (lecture.getStatus() == LectureStatus.CLOSE) {
+			return;
+		}
+
+		LocalDateTime lectureEndDateTime = lecture.getLectureEndDateTime();
+		if (lectureEndDateTime != null && now.isAfter(lectureEndDateTime)) {
+			lecture.close();
+			return;
+		}
+
+		if (lecture.getStatus() != LectureStatus.OPEN) {
+			return;
+		}
+
+		if (lecture.getApplicationDeadline() != null && now.isAfter(lecture.getApplicationDeadline())) {
+			if (enrolledCount >= CONFIRM_THRESHOLD) {
+				lecture.confirm();
+				return;
+			}
+			lecture.setStatus(LectureStatus.UNCONFIRMED);
 		}
 	}
 
