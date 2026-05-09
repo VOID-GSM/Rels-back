@@ -129,7 +129,7 @@ public class LectureService {
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
 
 		boolean useGradeCapacity = !capacityByGrade.isEmpty() && userGrade != null && capacityByGrade.containsKey(userGrade);
-		boolean isFull = false;
+		boolean isFull;
 		if (useGradeCapacity) {
 			long gradeEnrolled = lectureEnrollmentRepository.findAllByLectureId(lectureId).stream()
 				.filter(e -> e.getStatus() == EnrollmentStatus.ENROLLED)
@@ -211,6 +211,7 @@ public class LectureService {
 				lecture.getLectureLocation(),
 				lecture.getLectureDate(),
 				lecture.getLectureTime(),
+				lecture.getApplicationDeadline(),
 				lecture.getCreatedAt(),
 				lecture.getCapacityByGrade(),
 				lecture.getTotalCapacity()
@@ -262,6 +263,7 @@ public class LectureService {
 				lecture.getLectureLocation(),
 				lecture.getLectureDate(),
 				lecture.getLectureTime(),
+				lecture.getApplicationDeadline(),
 				lecture.getCreatedAt(),
 				lecture.getCapacityByGrade(),
 				lecture.getTotalCapacity()

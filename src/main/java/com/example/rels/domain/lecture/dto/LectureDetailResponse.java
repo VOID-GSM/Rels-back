@@ -21,6 +21,7 @@ public record LectureDetailResponse(
 		String lectureLocation,
 		LocalDate lectureDate,
 		LocalTime lectureTime,
+		LocalDateTime applicationDeadline,
 		LocalDateTime createdAt,
 		Map<Integer, Integer> capacityByGrade,
 		Integer totalCapacity
