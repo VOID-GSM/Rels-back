@@ -8,6 +8,8 @@ oauth:
     redirect-uris: ${DATAGSM_REDIRECT_URIS}
 
 spring:
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   datasource:
     url: ${DB_HOST}
     driver-class-name: ${DB_DRIVER}
