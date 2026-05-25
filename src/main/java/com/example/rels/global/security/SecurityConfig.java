@@ -45,15 +45,16 @@ public class SecurityConfig {
 				.csrf(AbstractHttpConfigurer::disable)
 				.cors(cors -> cors.configurationSource(corsConfigurationSource()))
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-				.authorizeHttpRequests(auth -> auth
-						.requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
-						.requestMatchers(HttpMethod.GET, "/api/auth/dg/start", "/api/auth/dg/callback").permitAll()
-						.requestMatchers(HttpMethod.POST, "/api/auth/signin").permitAll()
-						.requestMatchers("/error").permitAll()
-						.requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
-						.requestMatchers("/api/notices/**").authenticated()
-						.requestMatchers("/api/lectures/**").authenticated()
-						.anyRequest().authenticated())
+			.authorizeHttpRequests(auth -> auth
+					.requestMatchers("/health").permitAll()
+					.requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+					.requestMatchers(HttpMethod.GET, "/api/auth/dg/start", "/api/auth/dg/callback").permitAll()
+					.requestMatchers(HttpMethod.POST, "/api/auth/signin").permitAll()
+					.requestMatchers("/error").permitAll()
+					.requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
+					.requestMatchers("/api/notices/**").authenticated()
+					.requestMatchers("/api/lectures/**").authenticated()
+					.anyRequest().authenticated())
 				.addFilterBefore(tokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
 		return http.build();
