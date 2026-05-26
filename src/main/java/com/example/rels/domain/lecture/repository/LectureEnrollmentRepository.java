@@ -33,7 +33,6 @@ public interface LectureEnrollmentRepository extends JpaRepository<LectureEnroll
 
 	@Modifying
 	@Transactional
-	@Query("delete from LectureEnrollmentEntity e where e.lecture.id = :lectureId")
-				void deleteByLectureId(Long lectureId);
+	void deleteByLectureId(Long lectureId);
 
 				}
