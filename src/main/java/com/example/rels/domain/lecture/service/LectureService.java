@@ -96,6 +96,7 @@ public class LectureService {
 	public void deleteLecture(Long lectureId, Long userId) {
 		LectureEntity lecture = requireLecture(lectureId);
 		validateCreator(lecture, userId);
+		lectureEnrollmentRepository.deleteByLectureId(lectureId);
 		lectureRepository.delete(lecture);
 	}
 
