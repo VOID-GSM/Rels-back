@@ -12,6 +12,7 @@ import java.time.LocalDate;
 import java.lang.reflect.Field;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.time.LocalDateTime;
 
@@ -33,6 +34,7 @@ import com.example.rels.domain.user.entity.Role;
 import com.example.rels.domain.user.entity.UserEntity;
 import com.example.rels.domain.user.repository.UserRepository;
 import com.example.rels.domain.lecture.dto.EnrollmentResponse;
+import com.example.rels.domain.lecture.dto.LectureCreateRequest;
 import com.example.rels.domain.lecture.dto.LectureDetailResponse;
 import com.example.rels.domain.lecture.dto.LectureSummaryResponse;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
@@ -125,7 +127,7 @@ class LectureServiceTest {
 
 		Page<LectureSummaryResponse> lectures = lectureService.getLectures(pageable);
 
-		assertEquals(LectureStatus.CLOSE.name(), lectures.getContent().get(0).lectureStatus());
+		assertEquals(LectureStatus.CLOSE.name(), lectures.getContent().getFirst().lectureStatus());
 	}
 
 	@Test
@@ -161,7 +163,7 @@ class LectureServiceTest {
 	}
 
 	@Test
-	void enrollConfirmsLectureAtThreshold() {
+	void enrollDoesNotConfirmAtTenStudents() {
 		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now().plusDays(1), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), 30);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
@@ -180,10 +182,52 @@ class LectureServiceTest {
 		assertSame(lecture, saved.getLecture());
 		assertSame(applicant, saved.getUser());
 		assertEquals(EnrollmentStatus.ENROLLED, saved.getStatus());
-		assertEquals(LectureStatus.CONFIRMED, lecture.getStatus());
+		assertEquals(LectureStatus.OPEN, lecture.getStatus());
 		assertEquals("ENROLLED", response.enrollmentStatus());
 		assertEquals(10L, response.enrolledCount());
 		assertEquals(0L, response.waitingCount());
+	}
+
+	@Test
+	void enrollConfirmsLectureAboveThreshold() {
+		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now().plusDays(1), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), 30);
+		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
+
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+		when(userRepository.findById(2L)).thenReturn(Optional.of(applicant));
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.empty());
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(10L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
+
+		EnrollmentResponse response = lectureService.enroll(1L, 2L);
+
+		ArgumentCaptor<LectureEnrollmentEntity> captor = ArgumentCaptor.forClass(LectureEnrollmentEntity.class);
+		verify(lectureEnrollmentRepository).save(captor.capture());
+
+		assertEquals(LectureStatus.CONFIRMED, lecture.getStatus());
+		assertEquals("ENROLLED", response.enrollmentStatus());
+		assertEquals(11L, response.enrolledCount());
+	}
+
+	@Test
+	void createLectureRejectsTotalAndGradeCapacityTogether() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator);
+		when(userRepository.findById(1L)).thenReturn(Optional.of(creator));
+
+		var request = new LectureCreateRequest(
+				"title",
+				"description",
+				Map.of(1, 10),
+				20,
+				"장소",
+				LocalDate.now().plusDays(1),
+				LocalTime.NOON,
+				LocalDateTime.now().plusDays(1));
+
+		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> lectureService.createLecture(1L, request));
+
+		assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
 	}
 
 	@Test
