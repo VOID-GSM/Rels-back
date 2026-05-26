@@ -43,9 +43,7 @@ public class LectureService {
 
 	@Transactional
 	   public LectureDetailResponse createLecture(Long userId, LectureCreateRequest request) {
-    if (request.capacityByGrade() != null && !request.capacityByGrade().isEmpty() && request.totalCapacity() != null && request.totalCapacity() > 0) {
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원과 전체 정원은 동시에 설정할 수 없습니다.");
-    }
+	validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
     UserEntity creator = requireUser(userId);
     LectureEntity lecture = new LectureEntity(
         request.title(),
@@ -78,9 +76,7 @@ public class LectureService {
 
 	@Transactional
 	   public LectureDetailResponse updateLecture(Long lectureId, Long userId, LectureUpdateRequest request) {
-    if (request.capacityByGrade() != null && !request.capacityByGrade().isEmpty() && request.totalCapacity() != null && request.totalCapacity() > 0) {
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원과 전체 정원은 동시에 설정할 수 없습니다.");
-    }
+	validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
     LectureEntity lecture = requireLecture(lectureId);
     validateCreator(lecture, userId);
     lecture.updateAllDetails(
@@ -100,6 +96,7 @@ public class LectureService {
 	public void deleteLecture(Long lectureId, Long userId) {
 		LectureEntity lecture = requireLecture(lectureId);
 		validateCreator(lecture, userId);
+		lectureEnrollmentRepository.deleteAllByLectureId(lectureId);
 		lectureRepository.delete(lecture);
 	}
 
@@ -149,7 +146,7 @@ public class LectureService {
 		lectureEnrollmentRepository.save(new LectureEnrollmentEntity(lecture, user, status));
 
 		if (status == EnrollmentStatus.ENROLLED && lecture.getStatus() == LectureStatus.OPEN
-				&& enrolledCount + 1 >= CONFIRM_THRESHOLD) {
+				&& enrolledCount + 1 > CONFIRM_THRESHOLD) {
 			lecture.confirm();
 		}
 
@@ -185,6 +182,25 @@ public class LectureService {
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
 
 		return new EnrollmentResponse(lecture.getId(), "CANCELED", enrolledCount, waitingCount);
+	}
+
+	private void validateLectureCapacityRules(Map<Integer, Integer> capacityByGrade, Integer totalCapacity) {
+		if (capacityByGrade != null && !capacityByGrade.isEmpty() && totalCapacity != null) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원과 전체 정원은 동시에 설정할 수 없습니다.");
+		}
+
+		if (totalCapacity != null && totalCapacity < CONFIRM_THRESHOLD) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "전체 정원은 10명 이상이어야 합니다.");
+		}
+
+		if (capacityByGrade != null && !capacityByGrade.isEmpty()) {
+			int gradeCapacitySum = capacityByGrade.values().stream()
+					.mapToInt(Integer::intValue)
+					.sum();
+			if (gradeCapacitySum < CONFIRM_THRESHOLD) {
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원의 합계는 10명 이상이어야 합니다.");
+			}
+		}
 	}
 
 	private void promoteFirstWaitingUser(Long lectureId) {
@@ -297,11 +313,6 @@ public class LectureService {
 		syncLectureStatuses(LocalDateTime.now());
 	}
 
-	@Transactional
-	public void setUnconfirmedIfDeadlinePassed() {
-		syncLectureStatuses(LocalDateTime.now());
-	}
-
 	private void syncLectureStatuses(LocalDateTime now) {
 		List<LectureEntity> lectures = lectureRepository.findAll();
 		for (LectureEntity lecture : lectures) {
@@ -338,7 +349,7 @@ public class LectureService {
 		}
 
 		if (lecture.getApplicationDeadline() != null && now.isAfter(lecture.getApplicationDeadline())) {
-			if (enrolledCount >= CONFIRM_THRESHOLD) {
+			if (enrolledCount > CONFIRM_THRESHOLD) {
 				lecture.confirm();
 				return;
 			}
