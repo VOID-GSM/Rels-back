@@ -163,7 +163,7 @@ class LectureServiceTest {
 	}
 
 	@Test
-	void enrollDoesNotConfirmAtTenStudents() {
+	void enrollConfirmsLectureAtThreshold() {
 		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now().plusDays(1), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), 30);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
@@ -182,7 +182,7 @@ class LectureServiceTest {
 		assertSame(lecture, saved.getLecture());
 		assertSame(applicant, saved.getUser());
 		assertEquals(EnrollmentStatus.ENROLLED, saved.getStatus());
-		assertEquals(LectureStatus.OPEN, lecture.getStatus());
+		assertEquals(LectureStatus.CONFIRMED, lecture.getStatus());
 		assertEquals("ENROLLED", response.enrollmentStatus());
 		assertEquals(10L, response.enrolledCount());
 		assertEquals(0L, response.waitingCount());

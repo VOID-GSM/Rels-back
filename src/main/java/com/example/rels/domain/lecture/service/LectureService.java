@@ -96,7 +96,7 @@ public class LectureService {
 	public void deleteLecture(Long lectureId, Long userId) {
 		LectureEntity lecture = requireLecture(lectureId);
 		validateCreator(lecture, userId);
-		lectureEnrollmentRepository.deleteAllByLectureId(lectureId);
+		lectureEnrollmentRepository.deleteByLectureId(lectureId);
 		lectureRepository.delete(lecture);
 	}
 
@@ -146,7 +146,7 @@ public class LectureService {
 		lectureEnrollmentRepository.save(new LectureEnrollmentEntity(lecture, user, status));
 
 		if (status == EnrollmentStatus.ENROLLED && lecture.getStatus() == LectureStatus.OPEN
-				&& enrolledCount + 1 > CONFIRM_THRESHOLD) {
+				&& enrolledCount + 1 >= CONFIRM_THRESHOLD) {
 			lecture.confirm();
 		}
 
@@ -349,7 +349,7 @@ public class LectureService {
 		}
 
 		if (lecture.getApplicationDeadline() != null && now.isAfter(lecture.getApplicationDeadline())) {
-			if (enrolledCount > CONFIRM_THRESHOLD) {
+			if (enrolledCount >= CONFIRM_THRESHOLD) {
 				lecture.confirm();
 				return;
 			}
