@@ -100,6 +100,7 @@ public class LectureService {
 	public void deleteLecture(Long lectureId, Long userId) {
 		LectureEntity lecture = requireLecture(lectureId);
 		validateCreator(lecture, userId);
+		lectureEnrollmentRepository.deleteAllByLectureId(lectureId);
 		lectureRepository.delete(lecture);
 	}
 
@@ -294,11 +295,6 @@ public class LectureService {
 	@Scheduled(fixedDelayString = "${rels.lecture.lifecycle-sync-delay-ms:60000}")
 	@Transactional
 	public void syncLectureStatuses() {
-		syncLectureStatuses(LocalDateTime.now());
-	}
-
-	@Transactional
-	public void setUnconfirmedIfDeadlinePassed() {
 		syncLectureStatuses(LocalDateTime.now());
 	}
 

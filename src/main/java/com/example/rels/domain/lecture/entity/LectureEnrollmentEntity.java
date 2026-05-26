@@ -3,6 +3,8 @@ package com.example.rels.domain.lecture.entity;
 import java.time.LocalDateTime;
 
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 import com.example.rels.domain.user.entity.UserEntity;
 
@@ -31,6 +33,7 @@ public class LectureEnrollmentEntity {
 
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "lecture_id", nullable = false)
+	@OnDelete(action = OnDeleteAction.CASCADE)
 	private LectureEntity lecture;
 
 	@ManyToOne(fetch = FetchType.LAZY)

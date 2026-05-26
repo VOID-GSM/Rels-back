@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
 import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
@@ -28,4 +29,8 @@ public interface LectureEnrollmentRepository extends JpaRepository<LectureEnroll
 			EnrollmentStatus status);
 
 	List<LectureEnrollmentEntity> findAllByLectureId(Long lectureId);
+
+	@Modifying
+	@Query("delete from LectureEnrollmentEntity e where e.lecture.id = :lectureId")
+	void deleteAllByLectureId(Long lectureId);
 }
