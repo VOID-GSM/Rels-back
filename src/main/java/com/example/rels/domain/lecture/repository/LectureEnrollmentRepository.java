@@ -35,4 +35,5 @@ public interface LectureEnrollmentRepository extends JpaRepository<LectureEnroll
 	@Transactional
 	void deleteByLectureId(Long lectureId);
 
-				}
+	List<LectureEnrollmentEntity> findAllByUserId(Long userId);
+}
