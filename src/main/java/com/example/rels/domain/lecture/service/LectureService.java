@@ -146,7 +146,7 @@ public class LectureService {
 		}
 
 		EnrollmentStatus status = isFull ? EnrollmentStatus.WAITING : EnrollmentStatus.ENROLLED;
-		lectureEnrollmentRepository.save(new LectureEnrollmentEntity(lecture, user, status));
+		LectureEnrollmentEntity savedEnrollment = lectureEnrollmentRepository.save(new LectureEnrollmentEntity(lecture, user, status));
 
 		if (status == EnrollmentStatus.ENROLLED && lecture.getStatus() == LectureStatus.OPEN
 				&& enrolledCount + 1 >= CONFIRM_THRESHOLD) {
@@ -156,7 +156,7 @@ public class LectureService {
 		long nextEnrolledCount = status == EnrollmentStatus.ENROLLED ? enrolledCount + 1 : enrolledCount;
 		long nextWaitingCount = status == EnrollmentStatus.WAITING ? waitingCount + 1 : waitingCount;
 
-		return new EnrollmentResponse(lectureId, status.name(), nextEnrolledCount, nextWaitingCount);
+		return new EnrollmentResponse(lectureId, status.name(), nextEnrolledCount, nextWaitingCount, savedEnrollment.getRequestedAt());
 	}
 
 	private Integer extractGradeFromStudentNumber(String studentNumber) {
@@ -184,7 +184,7 @@ public class LectureService {
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
 
-		return new EnrollmentResponse(lecture.getId(), "CANCELED", enrolledCount, waitingCount);
+		return new EnrollmentResponse(lecture.getId(), "CANCELED", enrolledCount, waitingCount, null);
 	}
 
 	private void validateLectureCapacityRules(Map<Integer, Integer> capacityByGrade, Integer totalCapacity) {
