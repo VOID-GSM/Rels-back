@@ -48,7 +48,12 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
 				if (roleClaim == null || roleClaim.isBlank()) {
 					throw new IllegalArgumentException("Missing role claim");
 				}
-				Role role = Role.valueOf(roleClaim);
+				Role role;
+				if ("STUDENT_COUNCIL".equalsIgnoreCase(roleClaim) || "ADMIN".equalsIgnoreCase(roleClaim)) {
+					role = Role.ADMIN;
+				} else {
+					role = Role.USER;
+				}
 
 				AuthenticatedUser principal = new AuthenticatedUser(userId, email, name, studentNumber, role);
 				UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
