@@ -31,6 +31,8 @@ import com.example.rels.domain.lecture.repository.LectureRepository;
 public class LectureService {
 
 	private static final long CONFIRM_THRESHOLD = 10;
+	private static final int MIN_CAPACITY = 10;
+	private static final int MAX_CAPACITY = 30;
 
 	private final LectureRepository lectureRepository;
 	private final LectureEnrollmentRepository lectureEnrollmentRepository;
@@ -192,16 +194,38 @@ public class LectureService {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원과 전체 정원은 동시에 설정할 수 없습니다.");
 		}
 
-		if (totalCapacity != null && totalCapacity < CONFIRM_THRESHOLD) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "전체 정원은 10명 이상이어야 합니다.");
+		if (totalCapacity != null) {
+			if (totalCapacity < MIN_CAPACITY) {
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "전체 정원은 " + MIN_CAPACITY + "명 이상이어야 합니다.");
+			}
+			if (totalCapacity > MAX_CAPACITY) {
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "전체 정원은 최대 " + MAX_CAPACITY + "명까지 설정할 수 있습니다.");
+			}
 		}
 
 		if (capacityByGrade != null && !capacityByGrade.isEmpty()) {
 			int gradeCapacitySum = capacityByGrade.values().stream()
 					.mapToInt(Integer::intValue)
 					.sum();
-			if (gradeCapacitySum < CONFIRM_THRESHOLD) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원의 합계는 10명 이상이어야 합니다.");
+			if (gradeCapacitySum < MIN_CAPACITY) {
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원의 합계는 " + MIN_CAPACITY + "명 이상이어야 합니다.");
+			}
+			if (gradeCapacitySum > MAX_CAPACITY) {
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원의 합계는 최대 " + MAX_CAPACITY + "명까지 설정할 수 있습니다.");
+			}
+
+			for (Map.Entry<Integer, Integer> e : capacityByGrade.entrySet()) {
+				Integer grade = e.getKey();
+				Integer cap = e.getValue();
+				if (cap == null) {
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원 값은 널일 수 없습니다 (학년: " + grade + ").");
+				}
+				if (cap < 0) {
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원은 0 이상이어야 합니다. (학년: " + grade + ")");
+				}
+				if (cap > MAX_CAPACITY) {
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "한 학년의 정원은 최대 " + MAX_CAPACITY + "명까지 설정할 수 있습니다. (학년: " + grade + ")");
+				}
 			}
 		}
 	}
