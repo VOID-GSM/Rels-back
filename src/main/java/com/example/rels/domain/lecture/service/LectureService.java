@@ -5,6 +5,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.example.rels.domain.auth.dto.MyCreatedLectureResponse;
+import com.example.rels.domain.auth.dto.MyEnrolledLectureResponse;
+import com.example.rels.domain.auth.dto.MyLecturesResponse;
 import com.example.rels.domain.lecture.dto.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -384,5 +387,43 @@ public class LectureService {
 				user.getStudentNumber()
 		);
 	}
+
+	@Transactional(readOnly = true)
+	public MyLecturesResponse getMyLectures(Long userId) {
+		requireUser(userId);
+
+		List<LectureEnrollmentEntity> myEnrollments = lectureEnrollmentRepository.findAllByUserId(userId);
+		List<MyEnrolledLectureResponse> enrolledLectures = myEnrollments.stream()
+				.map(enrollment -> new MyEnrolledLectureResponse(
+						enrollment.getLecture().getId(),
+						enrollment.getLecture().getTitle(),
+						enrollment.getLecture().getStatus().name(),
+						enrollment.getStatus().name(),
+						enrollment.getLecture().getCreator().getName(),
+						enrollment.getLecture().getLectureLocation(),
+						enrollment.getLecture().getLectureDate(),
+						enrollment.getLecture().getLectureTime(),
+						enrollment.getLecture().getApplicationDeadline(),
+						enrollment.getRequestedAt()
+				))
+				.toList();
+
+		List<LectureEntity> myLectures = lectureRepository.findAllByCreatorIdOrderByCreatedAtDesc(userId);
+		List<MyCreatedLectureResponse> createdLectures = myLectures.stream()
+				.map(lecture -> new MyCreatedLectureResponse(
+						lecture.getId(),
+						lecture.getTitle(),
+						lecture.getStatus().name(),
+						lecture.getLectureLocation(),
+						lecture.getLectureDate(),
+						lecture.getLectureTime(),
+						lecture.getApplicationDeadline(),
+						lecture.getCreatedAt()
+				))
+				.toList();
+
+		return new MyLecturesResponse(enrolledLectures, createdLectures);
+	}
+
 }
 
