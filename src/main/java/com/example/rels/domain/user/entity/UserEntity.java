@@ -64,5 +64,11 @@ public class UserEntity {
 		this.name = name;
 		this.studentNumber = studentNumber;
 	}
+
+	public void updateProfile(String name, String studentNumber, Role role) {
+		this.name = name;
+		this.studentNumber = studentNumber;
+		this.role = role;
+	}
 }
 
