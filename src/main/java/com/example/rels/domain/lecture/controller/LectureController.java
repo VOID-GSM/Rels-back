@@ -1,5 +1,6 @@
 package com.example.rels.domain.lecture.controller;
 
+import com.example.rels.domain.auth.dto.MyLecturesResponse;
 import com.example.rels.domain.lecture.dto.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -89,6 +90,11 @@ public class LectureController {
 		return lectureService.getEnrollments(lectureId);
 	}
 
+	@GetMapping("/enrollments/me")
+	public MyLecturesResponse getMyLectures(@AuthenticationPrincipal AuthenticatedUser currentUser) {
+		AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		return lectureService.getMyLectures(authenticatedUser.userId());
+	}
 
 	private AuthenticatedUser requireUser(AuthenticatedUser currentUser) {
 		if (currentUser == null) {

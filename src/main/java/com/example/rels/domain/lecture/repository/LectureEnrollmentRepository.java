@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,4 +36,13 @@ public interface LectureEnrollmentRepository extends JpaRepository<LectureEnroll
 	@Transactional
 	void deleteByLectureId(Long lectureId);
 
-				}
+	@Query("""
+			select distinct e
+			from LectureEnrollmentEntity e
+			join fetch e.lecture l
+			join fetch l.creator
+			where e.user.id = :userId
+			order by e.requestedAt asc
+			""")
+	List<LectureEnrollmentEntity> findAllByUserId(@Param("userId") Long userId);
+}

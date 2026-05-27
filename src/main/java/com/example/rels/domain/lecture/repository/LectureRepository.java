@@ -1,5 +1,6 @@
 package com.example.rels.domain.lecture.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -21,5 +22,7 @@ public interface LectureRepository extends JpaRepository<LectureEntity, Long> {
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select l from LectureEntity l where l.id = :lectureId")
 	Optional<LectureEntity> findByIdForUpdate(Long lectureId);
+
+	List<LectureEntity> findAllByCreatorIdOrderByCreatedAtDesc(Long creatorId);
 }
 
