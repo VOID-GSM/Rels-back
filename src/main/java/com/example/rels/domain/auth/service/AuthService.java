@@ -62,21 +62,22 @@ public class AuthService {
 				throw new ResponseStatusException(HttpStatus.FORBIDDEN, "학생만 로그인할 수 있습니다.");
 			}
 
-			Student student = userInfo.getStudent();
-			if (student == null || student.getName() == null || student.getStudentNumber() == null || userInfo.getEmail() == null) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학생 정보가 유효하지 않습니다.");
-			}
+		Student student = userInfo.getStudent();
+		if (student == null || student.getName() == null || student.getStudentNumber() == null || userInfo.getEmail() == null) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학생 정보가 유효하지 않습니다.");
+		}
 
-			UserEntity user = findOrCreateUser(userInfo.getEmail(), student.getName(), String.valueOf(student.getStudentNumber()));
-			String accessToken = jwtTokenProvider.createToken(user);
+		team.themoment.datagsm.sdk.oauth.model.StudentRole studentRole = student.getRole();
+		UserEntity user = findOrCreateUser(userInfo.getEmail(), student.getName(), String.valueOf(student.getStudentNumber()), studentRole);
+		String accessToken = jwtTokenProvider.createToken(user);
 
-			return new OAuthSignInResponse(
-					accessToken,
-					user.getId(),
-					user.getEmail(),
-					user.getName(),
-					user.getStudentNumber(),
-					user.getRole().name());
+		return new OAuthSignInResponse(
+				accessToken,
+				user.getId(),
+				user.getEmail(),
+				user.getName(),
+				user.getStudentNumber(),
+				user.getRole().name());
 		} catch (DataGsmException e) {
 			log.warn("DataGSM OAuth error: status={}, message={}", e.getStatusCode(), e.getMessage());
 				throw new ResponseStatusException(resolveStatus(e.getStatusCode()), "OAuth 인증에 실패했습니다.");
@@ -100,13 +101,15 @@ public class AuthService {
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "사용자를 찾을 수 없습니다."));
 	}
 
-	private UserEntity findOrCreateUser(String email, String name, String studentNumber) {
+	private UserEntity findOrCreateUser(String email, String name, String studentNumber, team.themoment.datagsm.sdk.oauth.model.StudentRole studentRole) {
+		Role role = studentRole != null && "STUDENT_COUNCIL".equalsIgnoreCase(studentRole.name()) ? Role.ADMIN : Role.USER;
+
 		return userRepository.findByEmail(email)
 				.map(existing -> {
-				existing.updateProfile(name, studentNumber);
+				existing.updateProfile(name, studentNumber, role);
 				return existing;
 			})
-				.orElseGet(() -> userRepository.save(new UserEntity(email, name, studentNumber, Role.USER)));
+				.orElseGet(() -> userRepository.save(new UserEntity(email, name, studentNumber, role)));
 	}
 }
 
