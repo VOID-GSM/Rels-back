@@ -5,8 +5,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import com.example.rels.domain.auth.dto.MyCreatedLectureResponse;
-import com.example.rels.domain.auth.dto.MyEnrolledLectureResponse;
+import com.example.rels.domain.lecture.dto.MyCreatedLectureResponse;
+import com.example.rels.domain.lecture.dto.MyEnrolledLectureResponse;
 import com.example.rels.domain.auth.dto.MyLecturesResponse;
 import com.example.rels.domain.lecture.dto.*;
 import org.springframework.data.domain.Page;
