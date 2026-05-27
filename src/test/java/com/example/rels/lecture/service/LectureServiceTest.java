@@ -62,6 +62,13 @@ class LectureServiceTest {
 	@BeforeEach
 	void setUp() {
 		lectureService = new LectureService(lectureRepository, lectureEnrollmentRepository, userRepository);
+
+		// 기본적으로 save 호출은 mocked enrollment 객체를 반환하도록 설정해서
+		// 서비스에서 savedEnrollment.getRequestedAt() 호출 시 NPE가 발생하지 않도록 함
+		LectureEnrollmentEntity savedMock = org.mockito.Mockito.mock(LectureEnrollmentEntity.class);
+		when(savedMock.getRequestedAt()).thenReturn(LocalDateTime.now());
+		when(lectureEnrollmentRepository.save(org.mockito.ArgumentMatchers.any(LectureEnrollmentEntity.class)))
+			.thenReturn(savedMock);
 	}
 
 	@Test
