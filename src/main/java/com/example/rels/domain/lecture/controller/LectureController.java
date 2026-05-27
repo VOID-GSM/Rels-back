@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -87,6 +88,12 @@ public class LectureController {
 	@GetMapping("/{lectureId}/enrollments")
 	public EnrollmentListResponse getEnrollments(@PathVariable Long lectureId) {
 		return lectureService.getEnrollments(lectureId);
+	}
+
+	@GetMapping("/enrollments/me")
+	public List<LectureSummaryResponse> getMyEnrollments(@AuthenticationPrincipal AuthenticatedUser currentUser) {
+		AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		return lectureService.getMyEnrollments(authenticatedUser.userId());
 	}
 
 
