@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.rels.domain.user.entity.UserEntity;
+import com.example.rels.domain.user.entity.Role;
 import com.example.rels.domain.user.repository.UserRepository;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
 import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
@@ -80,10 +81,10 @@ public class LectureService {
 	}
 
 	@Transactional
-	   public LectureDetailResponse updateLecture(Long lectureId, Long userId, LectureUpdateRequest request) {
+	   public LectureDetailResponse updateLecture(Long lectureId, Long userId, Role role, LectureUpdateRequest request) {
 	validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
     LectureEntity lecture = requireLecture(lectureId);
-    validateCreator(lecture, userId);
+	    validateCreator(lecture, userId, role);
     lecture.updateAllDetails(
         request.title(),
         request.description(),
@@ -98,9 +99,9 @@ public class LectureService {
 	   }
 
 	@Transactional
-	public void deleteLecture(Long lectureId, Long userId) {
+	public void deleteLecture(Long lectureId, Long userId, Role role) {
 		LectureEntity lecture = requireLecture(lectureId);
-		validateCreator(lecture, userId);
+		validateCreator(lecture, userId, role);
 		lectureEnrollmentRepository.deleteByLectureId(lectureId);
 		lectureRepository.delete(lecture);
 	}
@@ -328,7 +329,10 @@ public class LectureService {
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "강의를 찾을 수 없습니다."));
 	}
 
-	private void validateCreator(LectureEntity lecture, Long userId) {
+	private void validateCreator(LectureEntity lecture, Long userId, Role role) {
+		if (role == Role.ADMIN) {
+			return;
+		}
 		if (!lecture.getCreator().getId().equals(userId)) {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "강의 작성자만 수정 또는 삭제할 수 있습니다.");
 		}
