@@ -40,10 +40,10 @@ public class LectureEntity {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	@Column(nullable = false, length = 120)
+	@Column(nullable = false, length = 100)
 	private String title;
 
-	@Column(nullable = false, columnDefinition = "TEXT")
+	@Column(nullable = false, length = 500)
 	private String description;
 
 	@ManyToOne(fetch = FetchType.LAZY)
