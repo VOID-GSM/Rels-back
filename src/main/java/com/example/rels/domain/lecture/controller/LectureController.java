@@ -57,7 +57,7 @@ public class LectureController {
 			   @AuthenticationPrincipal AuthenticatedUser currentUser,
 			   @Valid @RequestBody LectureUpdateRequest request) {
 		   AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		   return lectureService.updateLecture(lectureId, authenticatedUser.userId(), request);
+		   return lectureService.updateLecture(lectureId, authenticatedUser.userId(), authenticatedUser.role(), request);
 	   }
 
 	@DeleteMapping("/{lectureId}")
@@ -65,7 +65,7 @@ public class LectureController {
 			@PathVariable Long lectureId,
 			@AuthenticationPrincipal AuthenticatedUser currentUser) {
 		AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		lectureService.deleteLecture(lectureId, authenticatedUser.userId());
+		lectureService.deleteLecture(lectureId, authenticatedUser.userId(), authenticatedUser.role());
 		return ResponseEntity.noContent().build();
 	}
 

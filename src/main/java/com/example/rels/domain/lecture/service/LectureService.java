@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.example.rels.domain.user.entity.Role;
 import com.example.rels.domain.user.entity.UserEntity;
 import com.example.rels.domain.user.repository.UserRepository;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
@@ -80,32 +81,34 @@ public class LectureService {
 	}
 
 	@Transactional
-	   public LectureDetailResponse updateLecture(Long lectureId, Long userId, LectureUpdateRequest request) {
-	validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
-    LectureEntity lecture = requireLecture(lectureId);
-    validateCreator(lecture, userId);
-    lecture.updateAllDetails(
-        request.title(),
-        request.description(),
-        request.capacityByGrade(),
-        request.totalCapacity(),
-        request.lectureLocation(),
-        request.lectureDate(),
-        request.lectureTime(),
-        request.applicationDeadline()
-    );
-    return toLectureDetail(lecture, userId);
-	   }
+	public LectureDetailResponse updateLecture(Long lectureId, Long userId, Role userRole, LectureUpdateRequest request) {
+		validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
+
+		LectureEntity lecture = requireLecture(lectureId);
+		validateCreator(lecture, userId, userRole);
+
+		lecture.updateAllDetails(
+				request.title(),
+				request.description(),
+				request.capacityByGrade(),
+				request.totalCapacity(),
+				request.lectureLocation(),
+				request.lectureDate(),
+				request.lectureTime(),
+				request.applicationDeadline()
+		);
+
+		return toLectureDetail(lecture, userId);
+	}
 
 	@Transactional
-	public void deleteLecture(Long lectureId, Long userId) {
+	public void deleteLecture(Long lectureId, Long userId, Role userRole) {
 		LectureEntity lecture = requireLecture(lectureId);
-		validateCreator(lecture, userId);
+		validateCreator(lecture, userId, userRole);
+
 		lectureEnrollmentRepository.deleteByLectureId(lectureId);
 		lectureRepository.delete(lecture);
 	}
-
-
 
 	@Transactional
 	public EnrollmentResponse enroll(Long lectureId, Long userId) {
@@ -238,6 +241,9 @@ public class LectureService {
 
 	private LectureSummaryResponse toLectureSummary(LectureEntity lecture,
 			Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId) {
+		if (lecture.getCreator() == null) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
+		}
 		long enrolledCount = getEnrollmentCount(enrollmentCountsByLectureId, lecture.getId(), EnrollmentStatus.ENROLLED);
 		refreshLectureLifecycle(lecture, LocalDateTime.now(), enrolledCount);
 		long waitingCount = getEnrollmentCount(enrollmentCountsByLectureId, lecture.getId(), EnrollmentStatus.WAITING);
@@ -285,6 +291,9 @@ public class LectureService {
 	}
 
 	private LectureDetailResponse toLectureDetail(LectureEntity lecture, Long userId) {
+		if (lecture.getCreator() == null) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
+		}
 		refreshLectureLifecycle(lecture, LocalDateTime.now());
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.ENROLLED);
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.WAITING);
@@ -328,9 +337,23 @@ public class LectureService {
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "강의를 찾을 수 없습니다."));
 	}
 
-	private void validateCreator(LectureEntity lecture, Long userId) {
+	private void validateCreator(LectureEntity lecture, Long userId, Role userRole) {
+		if (lecture.getCreator() == null) {
+			throw new ResponseStatusException(
+					HttpStatus.INTERNAL_SERVER_ERROR,
+					"강의 생성자 정보가 없습니다."
+			);
+		}
+
+		if (userRole == Role.ADMIN) {
+			return;
+		}
+
 		if (!lecture.getCreator().getId().equals(userId)) {
-			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "강의 작성자만 수정 또는 삭제할 수 있습니다.");
+			throw new ResponseStatusException(
+					HttpStatus.FORBIDDEN,
+					"강의 작성자만 수정 또는 삭제할 수 있습니다."
+			);
 		}
 	}
 
@@ -418,7 +441,11 @@ public class LectureService {
 
 		List<LectureEnrollmentEntity> myEnrollments = lectureEnrollmentRepository.findAllByUserId(userId);
 		List<MyEnrolledLectureResponse> enrolledLectures = myEnrollments.stream()
-				.map(enrollment -> new MyEnrolledLectureResponse(
+				.map(enrollment -> {
+					if (enrollment.getLecture().getCreator() == null) {
+						throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
+					}
+					return new MyEnrolledLectureResponse(
 						enrollment.getLecture().getId(),
 						enrollment.getLecture().getTitle(),
 						enrollment.getLecture().getStatus().name(),
@@ -429,7 +456,8 @@ public class LectureService {
 						enrollment.getLecture().getLectureTime(),
 						enrollment.getLecture().getApplicationDeadline(),
 						enrollment.getRequestedAt()
-				))
+					);
+				})
 				.toList();
 
 		List<LectureEntity> myLectures = lectureRepository.findAllByCreatorIdOrderByCreatedAtDesc(userId);
