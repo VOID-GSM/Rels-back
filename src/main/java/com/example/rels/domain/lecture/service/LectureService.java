@@ -254,6 +254,7 @@ public class LectureService {
 				lecture.getDescription(),
 				lecture.getCreator().getId(),
 				lecture.getCreator().getName(),
+				lecture.getCreator().getStudentNumber(),
 				lecture.getStatus().name(),
 				enrolledCount,
 				waitingCount,
@@ -308,6 +309,7 @@ public class LectureService {
 				lecture.getDescription(),
 				lecture.getCreator().getId(),
 				lecture.getCreator().getName(),
+				lecture.getCreator().getStudentNumber(),
 				lecture.getStatus().name(),
 				enrolledCount,
 				waitingCount,
@@ -431,7 +433,8 @@ public class LectureService {
 		return new EnrollmentUserResponse(
 				user.getId(),
 				user.getName(),
-				user.getStudentNumber()
+				user.getStudentNumber(),
+				enrollment.getRequestedAt()
 		);
 	}
 
@@ -451,6 +454,7 @@ public class LectureService {
 						enrollment.getLecture().getStatus().name(),
 						enrollment.getStatus().name(),
 						enrollment.getLecture().getCreator().getName(),
+						enrollment.getLecture().getCreator().getStudentNumber(),
 						enrollment.getLecture().getLectureLocation(),
 						enrollment.getLecture().getLectureDate(),
 						enrollment.getLecture().getLectureTime(),

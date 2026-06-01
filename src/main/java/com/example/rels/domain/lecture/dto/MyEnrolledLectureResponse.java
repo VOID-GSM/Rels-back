@@ -10,6 +10,7 @@ public record MyEnrolledLectureResponse(
 		String lectureStatus,
 		String enrollmentStatus,
 		String creatorName,
+		String creatorStudentNumber,
 		String lectureLocation,
 		LocalDate lectureDate,
 		LocalTime lectureTime,
