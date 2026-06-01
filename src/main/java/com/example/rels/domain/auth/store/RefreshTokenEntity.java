@@ -1,9 +1,11 @@
 package com.example.rels.domain.auth.store;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -12,7 +14,9 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "refresh_tokens")
+@Table(name = "refresh_tokens", indexes = {
+		@Index(name = "idx_refresh_token_token", columnList = "token")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RefreshTokenEntity {
@@ -22,6 +26,8 @@ public class RefreshTokenEntity {
 	private Long id;
 
 	private Long userId;
+
+	@Column(name = "token", nullable = false, unique = true, length = 512)
 	private String token;
 	private LocalDateTime expiresAt;
 	private LocalDateTime createdAt;
