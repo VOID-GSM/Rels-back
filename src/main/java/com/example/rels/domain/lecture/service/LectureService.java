@@ -431,7 +431,8 @@ public class LectureService {
 		return new EnrollmentUserResponse(
 				user.getId(),
 				user.getName(),
-				user.getStudentNumber()
+				user.getStudentNumber(),
+				enrollment.getRequestedAt()
 		);
 	}
 
