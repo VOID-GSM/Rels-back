@@ -68,7 +68,7 @@ class LectureServiceTest {
 		LectureEnrollmentEntity savedMock = org.mockito.Mockito.mock(LectureEnrollmentEntity.class);
 		when(savedMock.getRequestedAt()).thenReturn(LocalDateTime.now());
 		when(lectureEnrollmentRepository.save(org.mockito.ArgumentMatchers.any(LectureEnrollmentEntity.class)))
-			.thenReturn(savedMock);
+				.thenReturn(savedMock);
 	}
 
 	@Test
@@ -381,8 +381,8 @@ class LectureServiceTest {
 
 		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
 
-		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class, 
-			() -> lectureService.updateLecture(1L, 2L, Role.USER, request));
+		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class,
+				() -> lectureService.updateLecture(1L, 2L, Role.USER, request));
 
 		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
 	}
@@ -399,8 +399,8 @@ class LectureServiceTest {
 
 		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
 
-		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class, 
-			() -> lectureService.deleteLecture(1L, 2L, Role.USER));
+		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class,
+				() -> lectureService.deleteLecture(1L, 2L, Role.USER));
 
 		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
 	}
@@ -450,4 +450,4 @@ class LectureServiceTest {
 		verify(lectureEnrollmentRepository).deleteByLectureId(1L);
 		verify(lectureRepository).delete(lecture);
 	}
-
+}
