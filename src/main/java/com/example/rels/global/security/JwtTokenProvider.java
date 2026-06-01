@@ -29,7 +29,7 @@ public class JwtTokenProvider {
 
 	public String createToken(UserEntity user) {
 		Date now = new Date();
-		Date expiration = new Date(now.getTime() + validityInMinutes * 60 * 1000);
+		Date expiration = new Date(now.getTime() + validityInMinutes * 60_000);
 
 		return Jwts.builder()
 				.subject(user.getId().toString())
@@ -45,7 +45,7 @@ public class JwtTokenProvider {
 
 	public String createRefreshToken(UserEntity user) {
 		Date now = new Date();
-		Date expiration = new Date(now.getTime() + refreshValidityInMinutes * 60 * 1000);
+		Date expiration = new Date(now.getTime() + refreshValidityInMinutes * 60_000);
 
 		return Jwts.builder()
 				.subject(user.getId().toString())
