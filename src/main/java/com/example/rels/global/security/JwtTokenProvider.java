@@ -19,12 +19,12 @@ public class JwtTokenProvider {
 
 	private final SecretKey secretKey;
 	private final long validityInMinutes;
-	private final long refreshValidityInDays;
+	private final long refreshValidityInMinutes;
 
-	public JwtTokenProvider(@Value("${jwt.secret}") String secret, @Value("${jwt.expiration}") long validityInMinutes, @Value("${jwt.refresh-expiration:10080}") long refreshValidityInDays) {
+	public JwtTokenProvider(@Value("${jwt.secret}") String secret, @Value("${jwt.expiration}") long validityInMinutes, @Value("${jwt.refresh-expiration:10080}") long refreshValidityInMinutes) {
 		this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
 		this.validityInMinutes = validityInMinutes;
-		this.refreshValidityInDays = refreshValidityInDays;
+		this.refreshValidityInMinutes = refreshValidityInMinutes;
 	}
 
 	public String createToken(UserEntity user) {
@@ -45,7 +45,7 @@ public class JwtTokenProvider {
 
 	public String createRefreshToken(UserEntity user) {
 		Date now = new Date();
-		Date expiration = new Date(now.getTime() + refreshValidityInDays * 60 * 1000);
+		Date expiration = new Date(now.getTime() + refreshValidityInMinutes * 60 * 1000);
 
 		return Jwts.builder()
 				.subject(user.getId().toString())
