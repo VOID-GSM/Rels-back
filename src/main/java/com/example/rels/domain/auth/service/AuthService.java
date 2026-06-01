@@ -104,8 +104,16 @@ public class AuthService {
 
 	@Transactional
 	public OAuthSignInResponse refresh(RefreshTokenRequest request) {
-		RefreshTokenEntity refreshTokenEntity = refreshTokenRepository.findByToken(request.refreshToken())
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 리프레시 토큰입니다."));
+		String refreshToken = request.refreshToken();
+		
+		try {
+			jwtTokenProvider.parseClaims(refreshToken);
+		} catch (Exception e) {
+			throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 리프레시 토큰입니다.");
+		}
+
+		RefreshTokenEntity refreshTokenEntity = refreshTokenRepository.findByToken(refreshToken)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "등록되지 않은 리프레시 토큰입니다."));
 
 		if (refreshTokenEntity.isExpired()) {
 			refreshTokenRepository.delete(refreshTokenEntity);
