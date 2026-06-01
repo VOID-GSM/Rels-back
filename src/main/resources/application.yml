@@ -31,9 +31,10 @@ spring:
 jwt:
   secret: ${JWT_SECRET}
   expiration: ${JWT_EXPIRATION}
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:10080}
 
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
   oauth-state:
-    store: ${OAUTH_STATE_STORE:memory}
+    store: ${OAUTH_STATE_STORE}
