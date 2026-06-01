@@ -1,7 +1,6 @@
 package com.example.rels.domain.auth.service;
 
 import java.time.LocalDateTime;
-import java.util.Date;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -22,7 +21,6 @@ import com.example.rels.domain.user.entity.UserEntity;
 import com.example.rels.domain.user.repository.UserRepository;
 import com.example.rels.global.security.JwtTokenProvider;
 
-import io.jsonwebtoken.Claims;
 import team.themoment.datagsm.sdk.oauth.DataGsmOAuthClient;
 import team.themoment.datagsm.sdk.oauth.exception.DataGsmException;
 import team.themoment.datagsm.sdk.oauth.model.Student;
