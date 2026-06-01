@@ -5,6 +5,6 @@ import jakarta.validation.constraints.Size;
 
 public record NoticeUpdateRequest(
         @NotBlank @Size(max = 100) String title,
-        @NotBlank @Size(max = 500) String content) {
+        @NotBlank @Size(max = 800) String content) {
 }
 

@@ -28,7 +28,7 @@ public class NoticeEntity {
     @Column(nullable = false, length = 100)
     private String title;
 
-    @Column(nullable = false, length = 500)
+    @Column(nullable = false, length = 800)
     private String content;
 
     @ManyToOne(fetch = FetchType.LAZY)
