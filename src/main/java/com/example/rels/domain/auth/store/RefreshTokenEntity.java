@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "refresh_tokens", indexes = {
-		@Index(name = "idx_refresh_token_token", columnList = "token")
+		@Index(name = "idx_refresh_token_hash", columnList = "token_hash")
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -27,14 +27,14 @@ public class RefreshTokenEntity {
 
 	private Long userId;
 
-	@Column(name = "token", nullable = false, unique = true, length = 512)
-	private String token;
+	@Column(name = "token_hash", nullable = false, unique = true, length = 64)
+	private String tokenHash;
 	private LocalDateTime expiresAt;
 	private LocalDateTime createdAt;
 
-	public RefreshTokenEntity(Long userId, String token, LocalDateTime expiresAt) {
+	public RefreshTokenEntity(Long userId, String tokenHash, LocalDateTime expiresAt) {
 		this.userId = userId;
-		this.token = token;
+		this.tokenHash = tokenHash;
 		this.expiresAt = expiresAt;
 		this.createdAt = LocalDateTime.now();
 	}

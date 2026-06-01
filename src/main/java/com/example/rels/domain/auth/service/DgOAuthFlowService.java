@@ -8,7 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.example.rels.domain.auth.dto.OAuthSignInResponse;
+import com.example.rels.domain.auth.dto.OAuthSignInResult;
 import com.example.rels.domain.auth.store.OAuthStateStore;
 
 import team.themoment.datagsm.sdk.oauth.DataGsmOAuthClient;
@@ -42,7 +42,7 @@ public class DgOAuthFlowService {
 		return URI.create(urlBuilder.build());
 	}
 
-	public OAuthSignInResponse completeLogin(String code, String state) {
+	public OAuthSignInResult completeLogin(String code, String state) {
 		if (code == null || code.isBlank() || state == null || state.isBlank()) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "code/state 값이 필요합니다.");
 		}

@@ -50,6 +50,7 @@ public class SecurityConfig {
 					.requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
 					.requestMatchers(HttpMethod.GET, "/api/auth/dg/start", "/api/auth/dg/callback").permitAll()
 					.requestMatchers(HttpMethod.POST, "/api/auth/signin").permitAll()
+					.requestMatchers(HttpMethod.POST, "/api/auth/refresh", "/api/auth/logout").permitAll()
 					.requestMatchers("/error").permitAll()
 					.requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
 					.requestMatchers("/api/notices/**").authenticated()
@@ -66,7 +67,7 @@ public class SecurityConfig {
 		configuration.setAllowedOrigins(allowedOrigins);
 		configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
 		configuration.setAllowedHeaders(List.of("*"));
-		configuration.setAllowCredentials(false);
+		configuration.setAllowCredentials(true);
 
 		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
 		source.registerCorsConfiguration("/**", configuration);

@@ -39,7 +39,7 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
 		String token = resolveToken(request);
 		if (token != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 			try {
-				Claims claims = jwtTokenProvider.parseClaims(token);
+				Claims claims = jwtTokenProvider.parseAccessClaims(token);
 				Long userId = Long.valueOf(claims.getSubject());
 				String email = claims.get("email", String.class);
 				String name = claims.get("name", String.class);

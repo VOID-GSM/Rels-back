@@ -1,6 +1,10 @@
 package com.example.rels.domain.auth.service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -12,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.rels.domain.auth.dto.OAuthSignInRequest;
-import com.example.rels.domain.auth.dto.OAuthSignInResponse;
+import com.example.rels.domain.auth.dto.OAuthSignInResult;
 import com.example.rels.domain.auth.dto.RefreshTokenRequest;
 import com.example.rels.domain.auth.store.RefreshTokenEntity;
 import com.example.rels.domain.auth.store.RefreshTokenRepository;
@@ -52,12 +56,12 @@ public class AuthService {
 	}
 
 	@Transactional
-	public OAuthSignInResponse signIn(OAuthSignInRequest request) {
+	public OAuthSignInResult signIn(OAuthSignInRequest request) {
 		return signIn(request.authCode(), request.redirectUri(), request.codeVerifier());
 	}
 
 	@Transactional
-	public OAuthSignInResponse signIn(String authCode, String redirectUri, String codeVerifier) {
+	public OAuthSignInResult signIn(String authCode, String redirectUri, String codeVerifier) {
 		assertAllowedRedirectUri(redirectUri);
 
 		try {
@@ -83,12 +87,11 @@ public class AuthService {
 			String refreshToken = jwtTokenProvider.createRefreshToken(user);
 			
 			LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(refreshTokenValidityInMinutes);
-			RefreshTokenEntity savedRefreshToken = refreshTokenRepository.save(
-					new RefreshTokenEntity(user.getId(), refreshToken, expiresAt));
+			refreshTokenRepository.save(new RefreshTokenEntity(user.getId(), hashToken(refreshToken), expiresAt));
 
-			return new OAuthSignInResponse(
+			return new OAuthSignInResult(
 					accessToken,
-					savedRefreshToken.getToken(),
+					refreshToken,
 					user.getId(),
 					user.getEmail(),
 					user.getName(),
@@ -101,16 +104,20 @@ public class AuthService {
 	}
 
 	@Transactional
-	public OAuthSignInResponse refresh(RefreshTokenRequest request) {
-		String refreshToken = request.refreshToken();
+	public OAuthSignInResult refresh(RefreshTokenRequest request) {
+		return refresh(request.refreshToken());
+	}
+
+	@Transactional
+	public OAuthSignInResult refresh(String refreshToken) {
 		
 		try {
-			jwtTokenProvider.parseClaims(refreshToken);
+			jwtTokenProvider.parseRefreshClaims(refreshToken);
 		} catch (Exception e) {
 			throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 리프레시 토큰입니다.");
 		}
 
-		RefreshTokenEntity refreshTokenEntity = refreshTokenRepository.findByToken(refreshToken)
+		RefreshTokenEntity refreshTokenEntity = refreshTokenRepository.findByTokenHash(hashToken(refreshToken))
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "등록되지 않은 리프레시 토큰입니다."));
 
 		if (refreshTokenEntity.isExpired()) {
@@ -126,12 +133,11 @@ public class AuthService {
 
 		refreshTokenRepository.delete(refreshTokenEntity);
 		LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(refreshTokenValidityInMinutes);
-		RefreshTokenEntity newRefreshTokenEntity = refreshTokenRepository.save(
-				new RefreshTokenEntity(user.getId(), newRefreshToken, expiresAt));
+		refreshTokenRepository.save(new RefreshTokenEntity(user.getId(), hashToken(newRefreshToken), expiresAt));
 
-		return new OAuthSignInResponse(
+		return new OAuthSignInResult(
 				newAccessToken,
-				newRefreshTokenEntity.getToken(),
+				newRefreshToken,
 				user.getId(),
 				user.getEmail(),
 				user.getName(),
@@ -141,7 +147,21 @@ public class AuthService {
 
 	@Transactional
 	public void logout(RefreshTokenRequest request) {
-		refreshTokenRepository.deleteByToken(request.refreshToken());
+		logout(request.refreshToken());
+	}
+
+	@Transactional
+	public void logout(String refreshToken) {
+		refreshTokenRepository.deleteByTokenHash(hashToken(refreshToken));
+	}
+
+	private String hashToken(String token) {
+		try {
+			MessageDigest digest = MessageDigest.getInstance("SHA-256");
+			return HexFormat.of().formatHex(digest.digest(token.getBytes(StandardCharsets.UTF_8)));
+		} catch (NoSuchAlgorithmException e) {
+			throw new IllegalStateException("SHA-256 algorithm is not available", e);
+		}
 	}
 
 	private HttpStatus resolveStatus(int statusCode) {
