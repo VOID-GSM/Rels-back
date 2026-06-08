@@ -15,7 +15,7 @@ import java.util.Map;
 
 public record LectureCreateRequest(
 	@NotBlank @Size(max = 100) String title,
-	@NotBlank @Size(max = 500) String description,
+	@NotBlank @Size(max = 800) String description,
 	Map<@NotNull @Min(1) @Max(3) Integer, @NotNull @Min(0) Integer> capacityByGrade,
 	Integer totalCapacity,
 	@NotBlank @Size(max = 255) String lectureLocation,
