@@ -35,6 +35,7 @@ import com.example.rels.domain.user.entity.UserEntity;
 import com.example.rels.domain.user.repository.UserRepository;
 import com.example.rels.domain.lecture.dto.EnrollmentResponse;
 import com.example.rels.domain.lecture.dto.LectureCreateRequest;
+import com.example.rels.domain.lecture.dto.LectureUpdateRequest;
 import com.example.rels.domain.lecture.dto.LectureDetailResponse;
 import com.example.rels.domain.lecture.dto.LectureSummaryResponse;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
@@ -66,8 +67,8 @@ class LectureServiceTest {
 		// 기본적으로 save 호출은 mocked enrollment 객체를 반환하도록 설정해서
 		// 서비스에서 savedEnrollment.getRequestedAt() 호출 시 NPE가 발생하지 않도록 함
 		LectureEnrollmentEntity savedMock = org.mockito.Mockito.mock(LectureEnrollmentEntity.class);
-		when(savedMock.getRequestedAt()).thenReturn(LocalDateTime.now());
-		when(lectureEnrollmentRepository.save(org.mockito.ArgumentMatchers.any(LectureEnrollmentEntity.class)))
+		org.mockito.Mockito.lenient().when(savedMock.getRequestedAt()).thenReturn(LocalDateTime.now());
+		org.mockito.Mockito.lenient().when(lectureEnrollmentRepository.save(org.mockito.ArgumentMatchers.any(LectureEnrollmentEntity.class)))
 			.thenReturn(savedMock);
 	}
 
@@ -220,7 +221,7 @@ class LectureServiceTest {
 	void createLectureRejectsTotalAndGradeCapacityTogether() {
 		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
 		setId(creator);
-		when(userRepository.findById(1L)).thenReturn(Optional.of(creator));
+		org.mockito.Mockito.lenient().when(userRepository.findById(1L)).thenReturn(Optional.of(creator));
 
 		var request = new LectureCreateRequest(
 				"title",
@@ -299,13 +300,160 @@ class LectureServiceTest {
 	}
 
 	private void setId(UserEntity user) {
+		setId(user, 1L);
+	}
+
+	private void setId(UserEntity user, Long id) {
 		try {
 			Field field = UserEntity.class.getDeclaredField("id");
 			field.setAccessible(true);
-			field.set(user, 1L);
+			field.set(user, id);
 		} catch (ReflectiveOperationException e) {
 			throw new IllegalStateException("id 설정 실패", e);
 		}
+	}
+
+	@Test
+	void updateLectureAllowsAdminToModifyOtherUserLecture() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator);
+		UserEntity admin = new UserEntity("admin@test.com", "admin", "2000000000", Role.ADMIN);
+		setId(admin, 2L);
+
+		LectureEntity lecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20);
+		setId(lecture, 1L);
+
+		LectureUpdateRequest request = new LectureUpdateRequest(
+				"updated title",
+				"updated description",
+				null,
+				20,
+				"updated 장소",
+				LocalDate.now().plusDays(2),
+				LocalTime.NOON,
+				LocalDateTime.now().plusDays(2)
+		);
+
+		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.empty());
+
+		LectureDetailResponse response = lectureService.updateLecture(1L, 2L, Role.ADMIN, request);
+
+		assertEquals("updated title", response.title());
+		assertEquals("updated description", response.description());
+	}
+
+	@Test
+	void deleteLectureAllowsAdminToDeleteOtherUserLecture() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator);
+		UserEntity admin = new UserEntity("admin@test.com", "admin", "2000000000", Role.ADMIN);
+		setId(admin, 2L);
+
+		LectureEntity lecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20);
+		setId(lecture, 1L);
+
+		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+
+		lectureService.deleteLecture(1L, 2L, Role.ADMIN);
+
+		verify(lectureEnrollmentRepository).deleteByLectureId(1L);
+		verify(lectureRepository).delete(lecture);
+	}
+
+	@Test
+	void updateLectureRejectsUserFromModifyingOtherUserLecture() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator);
+		UserEntity otherUser = new UserEntity("other@test.com", "other", "2000000000", Role.USER);
+		setId(otherUser, 2L);
+
+		LectureEntity lecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20);
+		setId(lecture, 1L);
+
+		LectureUpdateRequest request = new LectureUpdateRequest(
+				"updated title",
+				"updated description",
+				null,
+				20,
+				"updated 장소",
+				LocalDate.now().plusDays(2),
+				LocalTime.NOON,
+				LocalDateTime.now().plusDays(2)
+		);
+
+		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+
+		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class, 
+			() -> lectureService.updateLecture(1L, 2L, Role.USER, request));
+
+		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+	}
+
+	@Test
+	void deleteLectureRejectsUserFromDeletingOtherUserLecture() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator);
+		UserEntity otherUser = new UserEntity("other@test.com", "other", "2000000000", Role.USER);
+		setId(otherUser, 2L);
+
+		LectureEntity lecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20);
+		setId(lecture, 1L);
+
+		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+
+		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class, 
+			() -> lectureService.deleteLecture(1L, 2L, Role.USER));
+
+		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+	}
+
+	@Test
+	void updateLectureAllowsCreatorToModifyOwnLecture() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator);
+
+		LectureEntity lecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20);
+		setId(lecture, 1L);
+
+		LectureUpdateRequest request = new LectureUpdateRequest(
+				"updated title",
+				"updated description",
+				null,
+				20,
+				"updated 장소",
+				LocalDate.now().plusDays(2),
+				LocalTime.NOON,
+				LocalDateTime.now().plusDays(2)
+		);
+
+		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 1L)).thenReturn(Optional.empty());
+
+		LectureDetailResponse response = lectureService.updateLecture(1L, 1L, Role.USER, request);
+
+		assertEquals("updated title", response.title());
+		assertEquals("updated description", response.description());
+	}
+
+	@Test
+	void deleteLectureAllowsCreatorToDeleteOwnLecture() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator);
+
+		LectureEntity lecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20);
+		setId(lecture, 1L);
+
+		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+
+		lectureService.deleteLecture(1L, 1L, Role.USER);
+
+		verify(lectureEnrollmentRepository).deleteByLectureId(1L);
+		verify(lectureRepository).delete(lecture);
 	}
 }
 
