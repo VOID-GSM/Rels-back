@@ -35,6 +35,7 @@ import com.example.rels.domain.user.entity.UserEntity;
 import com.example.rels.domain.user.repository.UserRepository;
 import com.example.rels.domain.lecture.dto.EnrollmentResponse;
 import com.example.rels.domain.lecture.dto.LectureCreateRequest;
+import com.example.rels.domain.lecture.dto.LectureUpdateRequest;
 import com.example.rels.domain.lecture.dto.LectureDetailResponse;
 import com.example.rels.domain.lecture.dto.LectureSummaryResponse;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
@@ -66,8 +67,8 @@ class LectureServiceTest {
 		// 기본적으로 save 호출은 mocked enrollment 객체를 반환하도록 설정해서
 		// 서비스에서 savedEnrollment.getRequestedAt() 호출 시 NPE가 발생하지 않도록 함
 		LectureEnrollmentEntity savedMock = org.mockito.Mockito.mock(LectureEnrollmentEntity.class);
-		when(savedMock.getRequestedAt()).thenReturn(LocalDateTime.now());
-		when(lectureEnrollmentRepository.save(org.mockito.ArgumentMatchers.any(LectureEnrollmentEntity.class)))
+		org.mockito.Mockito.lenient().when(savedMock.getRequestedAt()).thenReturn(LocalDateTime.now());
+		org.mockito.Mockito.lenient().when(lectureEnrollmentRepository.save(org.mockito.ArgumentMatchers.any(LectureEnrollmentEntity.class)))
 			.thenReturn(savedMock);
 	}
 
@@ -220,7 +221,7 @@ class LectureServiceTest {
 	void createLectureRejectsTotalAndGradeCapacityTogether() {
 		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
 		setId(creator);
-		when(userRepository.findById(1L)).thenReturn(Optional.of(creator));
+		org.mockito.Mockito.lenient().when(userRepository.findById(1L)).thenReturn(Optional.of(creator));
 
 		var request = new LectureCreateRequest(
 				"title",
@@ -299,10 +300,14 @@ class LectureServiceTest {
 	}
 
 	private void setId(UserEntity user) {
+		setId(user, 1L);
+	}
+
+	private void setId(UserEntity user, Long id) {
 		try {
 			Field field = UserEntity.class.getDeclaredField("id");
 			field.setAccessible(true);
-			field.set(user, 1L);
+			field.set(user, id);
 		} catch (ReflectiveOperationException e) {
 			throw new IllegalStateException("id 설정 실패", e);
 		}
@@ -450,4 +455,5 @@ class LectureServiceTest {
 		verify(lectureEnrollmentRepository).deleteByLectureId(1L);
 		verify(lectureRepository).delete(lecture);
 	}
+}
 
