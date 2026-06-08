@@ -53,6 +53,7 @@ public class SecurityConfig {
 					.requestMatchers("/error").permitAll()
 					.requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
 					.requestMatchers("/api/notices/**").authenticated()
+					.requestMatchers(HttpMethod.GET, "/api/lectures/discord", "/api/lectures/discord/**").permitAll()
 					.requestMatchers("/api/lectures/**").authenticated()
 					.anyRequest().authenticated())
 				.addFilterBefore(tokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

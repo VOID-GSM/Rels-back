@@ -43,12 +43,25 @@ public class LectureController {
 		return lectureService.getLectures(pageable);
 	}
 
+	@GetMapping("/discord")
+	public Page<LectureSummaryResponse> getLecturesForDiscord(
+			@PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+		return lectureService.getLectures(pageable);
+	}
+
 	@GetMapping("/{lectureId}")
 	public LectureDetailResponse getLectureDetail(
 			@PathVariable Long lectureId,
 			@AuthenticationPrincipal AuthenticatedUser currentUser) {
 		AuthenticatedUser authenticatedUser = requireUser(currentUser);
 		return lectureService.getLectureDetail(lectureId, authenticatedUser.userId());
+	}
+
+	// Public endpoint for Discord bot usage - does not require authentication
+	@GetMapping("/discord/{lectureId}")
+	public LectureDetailResponse getLectureDetailForDiscord(
+			@PathVariable Long lectureId) {
+		return lectureService.getLectureDetailForDiscord(lectureId);
 	}
 
 	   @PatchMapping("/{lectureId}")

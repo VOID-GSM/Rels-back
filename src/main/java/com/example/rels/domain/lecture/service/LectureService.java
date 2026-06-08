@@ -80,6 +80,12 @@ public class LectureService {
 		return toLectureDetail(lecture, userId);
 	}
 
+	@Transactional(readOnly = true)
+	public LectureDetailResponse getLectureDetailForDiscord(Long lectureId) {
+		LectureEntity lecture = requireLecture(lectureId);
+		return toLectureDetail(lecture, null);
+	}
+
 	@Transactional
 	public LectureDetailResponse updateLecture(Long lectureId, Long userId, Role userRole, LectureUpdateRequest request) {
 		validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
