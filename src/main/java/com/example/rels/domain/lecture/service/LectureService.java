@@ -1,0 +1,491 @@
+package com.example.rels.domain.lecture.service;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import com.example.rels.domain.lecture.dto.MyCreatedLectureResponse;
+import com.example.rels.domain.lecture.dto.MyEnrolledLectureResponse;
+import com.example.rels.domain.auth.dto.MyLecturesResponse;
+import com.example.rels.domain.lecture.dto.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.example.rels.domain.user.entity.Role;
+import com.example.rels.domain.user.entity.UserEntity;
+import com.example.rels.domain.user.repository.UserRepository;
+import com.example.rels.domain.lecture.entity.EnrollmentStatus;
+import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
+import com.example.rels.domain.lecture.entity.LectureEntity;
+import com.example.rels.domain.lecture.entity.LectureStatus;
+import com.example.rels.domain.lecture.repository.LectureEnrollmentCountProjection;
+import com.example.rels.domain.lecture.repository.LectureEnrollmentRepository;
+import com.example.rels.domain.lecture.repository.LectureRepository;
+
+@Service
+public class LectureService {
+
+	private static final long CONFIRM_THRESHOLD = 10;
+	private static final int MIN_CAPACITY = 10;
+	private static final int MAX_CAPACITY = 30;
+
+	private final LectureRepository lectureRepository;
+	private final LectureEnrollmentRepository lectureEnrollmentRepository;
+	private final UserRepository userRepository;
+
+	public LectureService(LectureRepository lectureRepository,
+			LectureEnrollmentRepository lectureEnrollmentRepository,
+			UserRepository userRepository) {
+		this.lectureRepository = lectureRepository;
+		this.lectureEnrollmentRepository = lectureEnrollmentRepository;
+		this.userRepository = userRepository;
+	}
+
+	@Transactional
+	   public LectureDetailResponse createLecture(Long userId, LectureCreateRequest request) {
+	validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
+    UserEntity creator = requireUser(userId);
+    LectureEntity lecture = new LectureEntity(
+        request.title(),
+        request.description(),
+        creator,
+        request.lectureLocation(),
+        request.lectureDate(),
+        request.lectureTime(),
+        request.applicationDeadline(),
+        request.totalCapacity()
+    );
+    lecture.setCapacityByGrade(request.capacityByGrade());
+    lecture = lectureRepository.save(lecture);
+    return toLectureDetail(lecture, userId);
+	   }
+
+	@Transactional(readOnly = true)
+	public Page<LectureSummaryResponse> getLectures(Pageable pageable) {
+		Page<LectureEntity> lectures = lectureRepository.findAllByOrderByCreatedAtDesc(pageable);
+		Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId = getEnrollmentCountsByLectureIds(lectures.getContent());
+
+		return lectures.map(lecture -> toLectureSummary(lecture, enrollmentCountsByLectureId));
+	}
+
+	@Transactional(readOnly = true)
+	public LectureDetailResponse getLectureDetail(Long lectureId, Long userId) {
+		LectureEntity lecture = requireLecture(lectureId);
+		return toLectureDetail(lecture, userId);
+	}
+
+	@Transactional(readOnly = true)
+	public LectureDetailResponse getLectureDetailForDiscord(Long lectureId) {
+		LectureEntity lecture = requireLecture(lectureId);
+		return toLectureDetail(lecture, null);
+	}
+
+	@Transactional
+	public LectureDetailResponse updateLecture(Long lectureId, Long userId, Role userRole, LectureUpdateRequest request) {
+		validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
+
+		LectureEntity lecture = requireLecture(lectureId);
+		validateCreator(lecture, userId, userRole);
+
+		lecture.updateAllDetails(
+				request.title(),
+				request.description(),
+				request.capacityByGrade(),
+				request.totalCapacity(),
+				request.lectureLocation(),
+				request.lectureDate(),
+				request.lectureTime(),
+				request.applicationDeadline()
+		);
+
+		return toLectureDetail(lecture, userId);
+	}
+
+	@Transactional
+	public void deleteLecture(Long lectureId, Long userId, Role userRole) {
+		LectureEntity lecture = requireLecture(lectureId);
+		validateCreator(lecture, userId, userRole);
+
+		lectureEnrollmentRepository.deleteByLectureId(lectureId);
+		lectureRepository.delete(lecture);
+	}
+
+	@Transactional
+	public EnrollmentResponse enroll(Long lectureId, Long userId) {
+		LectureEntity lecture = requireLectureForUpdate(lectureId);
+		refreshLectureLifecycle(lecture, LocalDateTime.now());
+		if (lecture.getStatus() == LectureStatus.CLOSE) {
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "이미 종료된 강의입니다.");
+		}
+		if (LocalDateTime.now().isAfter(lecture.getApplicationDeadline())) {
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "신청 마감일이 지났습니다.");
+		}
+		UserEntity user = requireUser(userId);
+
+		lectureEnrollmentRepository.findByLectureIdAndUserId(lectureId, userId)
+				.ifPresent(existing -> {
+					throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 신청한 강의입니다.");
+				});
+
+		Integer userGrade = extractGradeFromStudentNumber(user.getStudentNumber());
+		Map<Integer, Integer> capacityByGrade = lecture.getCapacityByGrade() == null ? Map.of() : lecture.getCapacityByGrade();
+		Integer totalCapacity = lecture.getTotalCapacity();
+		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
+		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
+
+		boolean useGradeCapacity = !capacityByGrade.isEmpty() && userGrade != null && capacityByGrade.containsKey(userGrade);
+		boolean isFull;
+		if (useGradeCapacity) {
+			long gradeEnrolled = lectureEnrollmentRepository.findAllByLectureId(lectureId).stream()
+				.filter(e -> e.getStatus() == EnrollmentStatus.ENROLLED)
+				.filter(e -> {
+					Integer grade = extractGradeFromStudentNumber(e.getUser().getStudentNumber());
+					return grade != null && grade.equals(userGrade);
+				})
+				.count();
+			isFull = gradeEnrolled >= capacityByGrade.get(userGrade);
+		} else if (totalCapacity != null && totalCapacity > 0) {
+			isFull = enrolledCount >= totalCapacity;
+		} else {
+			isFull = false;
+		}
+
+		EnrollmentStatus status = isFull ? EnrollmentStatus.WAITING : EnrollmentStatus.ENROLLED;
+		LectureEnrollmentEntity savedEnrollment = lectureEnrollmentRepository.save(new LectureEnrollmentEntity(lecture, user, status));
+
+		if (status == EnrollmentStatus.ENROLLED && lecture.getStatus() == LectureStatus.OPEN
+				&& enrolledCount + 1 >= CONFIRM_THRESHOLD) {
+			lecture.confirm();
+		}
+
+		long nextEnrolledCount = status == EnrollmentStatus.ENROLLED ? enrolledCount + 1 : enrolledCount;
+		long nextWaitingCount = status == EnrollmentStatus.WAITING ? waitingCount + 1 : waitingCount;
+
+		return new EnrollmentResponse(lectureId, status.name(), nextEnrolledCount, nextWaitingCount, savedEnrollment.getRequestedAt());
+	}
+
+	private Integer extractGradeFromStudentNumber(String studentNumber) {
+		if (studentNumber == null || studentNumber.isEmpty()) return null;
+		try {
+			return Integer.parseInt(studentNumber.substring(1, 2));
+		} catch (Exception e) {
+			return null;
+		}
+	}
+
+	@Transactional
+	public EnrollmentResponse cancelEnrollment(Long lectureId, Long userId) {
+		LectureEntity lecture = requireLectureForUpdate(lectureId);
+		LectureEnrollmentEntity enrollment = lectureEnrollmentRepository.findByLectureIdAndUserId(lectureId, userId)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "신청 내역이 없습니다."));
+
+		EnrollmentStatus canceledStatus = enrollment.getStatus();
+		lectureEnrollmentRepository.delete(enrollment);
+
+		if (canceledStatus == EnrollmentStatus.ENROLLED) {
+			promoteFirstWaitingUser(lectureId);
+		}
+
+		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
+		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
+
+		return new EnrollmentResponse(lecture.getId(), "CANCELED", enrolledCount, waitingCount, null);
+	}
+
+	private void validateLectureCapacityRules(Map<Integer, Integer> capacityByGrade, Integer totalCapacity) {
+		if (capacityByGrade != null && !capacityByGrade.isEmpty() && totalCapacity != null) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원과 전체 정원은 동시에 설정할 수 없습니다.");
+		}
+
+		if (totalCapacity != null) {
+			if (totalCapacity < MIN_CAPACITY) {
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "전체 정원은 " + MIN_CAPACITY + "명 이상이어야 합니다.");
+			}
+			if (totalCapacity > MAX_CAPACITY) {
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "전체 정원은 최대 " + MAX_CAPACITY + "명까지 설정할 수 있습니다.");
+			}
+		}
+
+		if (capacityByGrade != null && !capacityByGrade.isEmpty()) {
+			int gradeCapacitySum = capacityByGrade.values().stream()
+					.mapToInt(Integer::intValue)
+					.sum();
+			if (gradeCapacitySum < MIN_CAPACITY) {
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원의 합계는 " + MIN_CAPACITY + "명 이상이어야 합니다.");
+			}
+			if (gradeCapacitySum > MAX_CAPACITY) {
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원의 합계는 최대 " + MAX_CAPACITY + "명까지 설정할 수 있습니다.");
+			}
+
+			for (Map.Entry<Integer, Integer> e : capacityByGrade.entrySet()) {
+				Integer grade = e.getKey();
+				Integer cap = e.getValue();
+				if (cap == null) {
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원 값은 널일 수 없습니다 (학년: " + grade + ").");
+				}
+				if (cap < 0) {
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원은 0 이상이어야 합니다. (학년: " + grade + ")");
+				}
+				if (cap > MAX_CAPACITY) {
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "한 학년의 정원은 최대 " + MAX_CAPACITY + "명까지 설정할 수 있습니다. (학년: " + grade + ")");
+				}
+			}
+		}
+	}
+
+	private void promoteFirstWaitingUser(Long lectureId) {
+		lectureEnrollmentRepository.findFirstByLectureIdAndStatusOrderByRequestedAtAscIdAsc(lectureId,
+				EnrollmentStatus.WAITING)
+				.ifPresent(LectureEnrollmentEntity::promoteToEnrolled);
+	}
+
+	private LectureSummaryResponse toLectureSummary(LectureEntity lecture,
+			Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId) {
+		if (lecture.getCreator() == null) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
+		}
+		long enrolledCount = getEnrollmentCount(enrollmentCountsByLectureId, lecture.getId(), EnrollmentStatus.ENROLLED);
+		refreshLectureLifecycle(lecture, LocalDateTime.now(), enrolledCount);
+		long waitingCount = getEnrollmentCount(enrollmentCountsByLectureId, lecture.getId(), EnrollmentStatus.WAITING);
+
+		return new LectureSummaryResponse(
+				lecture.getId(),
+				lecture.getTitle(),
+				lecture.getDescription(),
+				lecture.getCreator().getId(),
+				lecture.getCreator().getName(),
+				lecture.getCreator().getStudentNumber(),
+				lecture.getStatus().name(),
+				enrolledCount,
+				waitingCount,
+				lecture.getLectureLocation(),
+				lecture.getLectureDate(),
+				lecture.getLectureTime(),
+				lecture.getApplicationDeadline(),
+				lecture.getCreatedAt(),
+				lecture.getCapacityByGrade(),
+				lecture.getTotalCapacity()
+		);
+	}
+
+	private Map<Long, Map<EnrollmentStatus, Long>> getEnrollmentCountsByLectureIds(List<LectureEntity> lectures) {
+		if (lectures.isEmpty()) {
+			return Map.of();
+		}
+
+		List<Long> lectureIds = lectures.stream()
+				.map(LectureEntity::getId)
+				.toList();
+
+		return lectureEnrollmentRepository.countEnrollmentsByLectureIds(lectureIds).stream()
+				.collect(Collectors.groupingBy(
+					LectureEnrollmentCountProjection::getLectureId,
+					Collectors.toMap(
+						LectureEnrollmentCountProjection::getStatus,
+						LectureEnrollmentCountProjection::getEnrollmentCount)));
+	}
+
+	private long getEnrollmentCount(Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId,
+			Long lectureId, EnrollmentStatus status) {
+		return enrollmentCountsByLectureId.getOrDefault(lectureId, Map.of())
+				.getOrDefault(status, 0L);
+	}
+
+	private LectureDetailResponse toLectureDetail(LectureEntity lecture, Long userId) {
+		if (lecture.getCreator() == null) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
+		}
+		refreshLectureLifecycle(lecture, LocalDateTime.now());
+		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.ENROLLED);
+		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.WAITING);
+
+		String myEnrollmentStatus = lectureEnrollmentRepository.findByLectureIdAndUserId(lecture.getId(), userId)
+				.map(enrollment -> enrollment.getStatus().name())
+				.orElse(null);
+
+		return new LectureDetailResponse(
+				lecture.getId(),
+				lecture.getTitle(),
+				lecture.getDescription(),
+				lecture.getCreator().getId(),
+				lecture.getCreator().getName(),
+				lecture.getCreator().getStudentNumber(),
+				lecture.getStatus().name(),
+				enrolledCount,
+				waitingCount,
+				myEnrollmentStatus,
+				lecture.getLectureLocation(),
+				lecture.getLectureDate(),
+				lecture.getLectureTime(),
+				lecture.getApplicationDeadline(),
+				lecture.getCreatedAt(),
+				lecture.getCapacityByGrade(),
+				lecture.getTotalCapacity()
+		);
+	}
+
+	private UserEntity requireUser(Long userId) {
+		return userRepository.findById(userId)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "사용자를 찾을 수 없습니다."));
+	}
+
+	private LectureEntity requireLecture(Long lectureId) {
+		return lectureRepository.findById(lectureId)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "강의를 찾을 수 없습니다."));
+	}
+
+	private LectureEntity requireLectureForUpdate(Long lectureId) {
+		return lectureRepository.findByIdForUpdate(lectureId)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "강의를 찾을 수 없습니다."));
+	}
+
+	private void validateCreator(LectureEntity lecture, Long userId, Role userRole) {
+		if (lecture.getCreator() == null) {
+			throw new ResponseStatusException(
+					HttpStatus.INTERNAL_SERVER_ERROR,
+					"강의 생성자 정보가 없습니다."
+			);
+		}
+
+		if (userRole == Role.ADMIN) {
+			return;
+		}
+
+		if (!lecture.getCreator().getId().equals(userId)) {
+			throw new ResponseStatusException(
+					HttpStatus.FORBIDDEN,
+					"강의 작성자만 수정 또는 삭제할 수 있습니다."
+			);
+		}
+	}
+
+	@Scheduled(fixedDelayString = "${rels.lecture.lifecycle-sync-delay-ms:60000}")
+	@Transactional
+	public void syncLectureStatuses() {
+		syncLectureStatuses(LocalDateTime.now());
+	}
+
+	private void syncLectureStatuses(LocalDateTime now) {
+		List<LectureEntity> lectures = lectureRepository.findAll();
+		for (LectureEntity lecture : lectures) {
+			refreshLectureLifecycle(lecture, now);
+		}
+	}
+
+	private void refreshLectureLifecycle(LectureEntity lecture, LocalDateTime now) {
+		if (lecture.getId() == null) {
+			LocalDateTime lectureEndDateTime = lecture.getLectureEndDateTime();
+			if (lecture.getStatus() != LectureStatus.CLOSE && lectureEndDateTime != null && now.isAfter(lectureEndDateTime)) {
+				lecture.close();
+			}
+			return;
+		}
+
+		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.ENROLLED);
+		refreshLectureLifecycle(lecture, now, enrolledCount);
+	}
+
+	private void refreshLectureLifecycle(LectureEntity lecture, LocalDateTime now, long enrolledCount) {
+		if (lecture.getStatus() == LectureStatus.CLOSE) {
+			return;
+		}
+
+		LocalDateTime lectureEndDateTime = lecture.getLectureEndDateTime();
+		if (lectureEndDateTime != null && now.isAfter(lectureEndDateTime)) {
+			lecture.close();
+			return;
+		}
+
+		if (lecture.getStatus() != LectureStatus.OPEN) {
+			return;
+		}
+
+		if (lecture.getApplicationDeadline() != null && now.isAfter(lecture.getApplicationDeadline())) {
+			if (enrolledCount >= CONFIRM_THRESHOLD) {
+				lecture.confirm();
+				return;
+			}
+			lecture.setStatus(LectureStatus.UNCONFIRMED);
+		}
+	}
+
+	@Transactional(readOnly = true)
+	public EnrollmentListResponse getEnrollments(Long lectureId) {
+		requireLecture(lectureId);
+
+		List<LectureEnrollmentEntity> allEnrollments = lectureEnrollmentRepository.findAllByLectureId(lectureId);
+
+		List<EnrollmentUserResponse> enrolled = allEnrollments.stream()
+				.filter(e -> e.getStatus() == EnrollmentStatus.ENROLLED)
+				.map(this::toEnrollmentUserResponse)
+				.toList();
+
+		List<EnrollmentUserResponse> waiting = allEnrollments.stream()
+				.filter(e -> e.getStatus() == EnrollmentStatus.WAITING)
+				.map(this::toEnrollmentUserResponse)
+				.toList();
+
+		return new EnrollmentListResponse(enrolled, waiting);
+	}
+
+	private EnrollmentUserResponse toEnrollmentUserResponse(LectureEnrollmentEntity enrollment) {
+		UserEntity user = enrollment.getUser();
+		return new EnrollmentUserResponse(
+				user.getId(),
+				user.getName(),
+				user.getStudentNumber(),
+				enrollment.getRequestedAt()
+		);
+	}
+
+	@Transactional(readOnly = true)
+	public MyLecturesResponse getMyLectures(Long userId) {
+		requireUser(userId);
+
+		List<LectureEnrollmentEntity> myEnrollments = lectureEnrollmentRepository.findAllByUserId(userId);
+		List<MyEnrolledLectureResponse> enrolledLectures = myEnrollments.stream()
+				.map(enrollment -> {
+					if (enrollment.getLecture().getCreator() == null) {
+						throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
+					}
+					return new MyEnrolledLectureResponse(
+						enrollment.getLecture().getId(),
+						enrollment.getLecture().getTitle(),
+						enrollment.getLecture().getStatus().name(),
+						enrollment.getStatus().name(),
+						enrollment.getLecture().getCreator().getName(),
+						enrollment.getLecture().getCreator().getStudentNumber(),
+						enrollment.getLecture().getLectureLocation(),
+						enrollment.getLecture().getLectureDate(),
+						enrollment.getLecture().getLectureTime(),
+						enrollment.getLecture().getApplicationDeadline(),
+						enrollment.getRequestedAt()
+					);
+				})
+				.toList();
+
+		List<LectureEntity> myLectures = lectureRepository.findAllByCreatorIdOrderByCreatedAtDesc(userId);
+		List<MyCreatedLectureResponse> createdLectures = myLectures.stream()
+				.map(lecture -> new MyCreatedLectureResponse(
+						lecture.getId(),
+						lecture.getTitle(),
+						lecture.getStatus().name(),
+						lecture.getLectureLocation(),
+						lecture.getLectureDate(),
+						lecture.getLectureTime(),
+						lecture.getApplicationDeadline(),
+						lecture.getCreatedAt()
+				))
+				.toList();
+
+		return new MyLecturesResponse(enrolledLectures, createdLectures);
+	}
+
+}
+
