@@ -1,8 +1,7 @@
-name: CD
-
+name: CD 
 on:
   push:
-    branches: [ main ]
+    branches: [ feat/dockerfile ]
 
 jobs:
   test:
@@ -17,7 +16,7 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-
+      
       - name: Cache Gradle packages
         uses: actions/cache@v4
         with:
@@ -30,23 +29,43 @@ jobs:
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
-
+      
       - name: Run tests
         run: ./gradlew test --no-daemon
 
-  deploy:
-    needs: test
-    runs-on: ubuntu-latest
+deploy:
+  needs: test
+  runs-on: ubuntu-latest
 
-    steps:
-      - name: Deploy to server via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            cd ${{ secrets.SERVER_DEPLOY_PATH }}
-            git pull origin main
-            docker compose up --build -d
-            docker image prune -f
+  steps:
+    - name: deploy to server via SSH
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        script: |
+          cd ${{ secrets.SERVER_DEPLOY_PATH }}
+          git pull origin feat/dockerfile
+          docker compose up --build -daemon
+          docker image prune -failure
+    
+    - name: Notify Discord (success)
+      if: success()
+      uses: sarisia/actions-status-discord@v1
+      with:
+        webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        status: success
+        title: 백엔드 CD 배포 완료
+        description: "브랜치: '${{ github.ref_name }}' | 서버 배포에 성공했습니다. "
+        color: 0x57F287
+    
+    - name: Notify Discord (failure)
+      if: failure()
+      uses: sarisia/actions-status-discord@v1
+      with:
+        webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        status: failure
+        title: 백엔드 CD 배포 실패
+        description: "브랜치: '${{ github.ref_name }}' | 배포 스크립트나 도커 로그를 확인해주세요!! "
+        color: 0xED4245
