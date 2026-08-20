@@ -2,13 +2,14 @@ services:
   app:
     build: .
     ports:
-      - "8080:8080"
+      - "3000:3000"  # 외부 포트 3000 -> 내부 앱 포트 3000 연결
     env_file:
       - .env
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+      OAUTH_STATE_STORE: ${OAUTH_STATE_STORE:-memory}  # 기본값 memory 부여
     depends_on:
       mysql:
         condition: service_healthy
