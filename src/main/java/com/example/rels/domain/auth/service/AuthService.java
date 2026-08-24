@@ -1,8 +1,11 @@
 package com.example.rels.domain.auth.service;
 
 import java.time.LocalDateTime;
-import java.util.Date;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +25,6 @@ import com.example.rels.domain.user.entity.UserEntity;
 import com.example.rels.domain.user.repository.UserRepository;
 import com.example.rels.global.security.JwtTokenProvider;
 
-import io.jsonwebtoken.Claims;
 import team.themoment.datagsm.sdk.oauth.DataGsmOAuthClient;
 import team.themoment.datagsm.sdk.oauth.exception.DataGsmException;
 import team.themoment.datagsm.sdk.oauth.model.Student;
@@ -46,7 +48,7 @@ public class AuthService {
 	private long refreshTokenValidityInMinutes;
 
 	public AuthService(DataGsmOAuthClient dataGsmOAuthClient, UserRepository userRepository,
-			JwtTokenProvider jwtTokenProvider, RefreshTokenRepository refreshTokenRepository) {
+					   JwtTokenProvider jwtTokenProvider, RefreshTokenRepository refreshTokenRepository) {
 		this.dataGsmOAuthClient = dataGsmOAuthClient;
 		this.userRepository = userRepository;
 		this.jwtTokenProvider = jwtTokenProvider;
@@ -63,11 +65,13 @@ public class AuthService {
 		assertAllowedRedirectUri(redirectUri);
 
 		try {
-			TokenResponse tokenResponse = dataGsmOAuthClient.exchangeCodeForToken(
-					authCode,
-					redirectUri,
-					codeVerifier);
-			UserInfo userInfo = dataGsmOAuthClient.getUserInfo(tokenResponse.getAccessToken());
+			TokenResponse tokenResponse = CompletableFuture.supplyAsync(() ->
+					dataGsmOAuthClient.exchangeCodeForToken(authCode, redirectUri, codeVerifier)
+			).get(15, TimeUnit.SECONDS);
+
+			UserInfo userInfo = CompletableFuture.supplyAsync(() ->
+					dataGsmOAuthClient.getUserInfo(tokenResponse.getAccessToken())
+			).get(15, TimeUnit.SECONDS);
 
 			if (!userInfo.isStudent()) {
 				throw new ResponseStatusException(HttpStatus.FORBIDDEN, "학생만 로그인할 수 있습니다.");
@@ -80,10 +84,10 @@ public class AuthService {
 
 			team.themoment.datagsm.sdk.oauth.model.StudentRole studentRole = student.getRole();
 			UserEntity user = findOrCreateUser(userInfo.getEmail(), student.getName(), String.valueOf(student.getStudentNumber()), studentRole);
-			
+
 			String accessToken = jwtTokenProvider.createToken(user);
 			String refreshToken = jwtTokenProvider.createRefreshToken(user);
-			
+
 			LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(refreshTokenValidityInMinutes);
 			RefreshTokenEntity savedRefreshToken = refreshTokenRepository.save(
 					new RefreshTokenEntity(user.getId(), refreshToken, expiresAt));
@@ -96,6 +100,24 @@ public class AuthService {
 					user.getName(),
 					user.getStudentNumber(),
 					user.getRole().name());
+
+		} catch (TimeoutException e) {
+			log.error("DataGSM OAuth 통신 타임아웃 (15초 초과)");
+			throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "인증 서버 응답 시간이 초과되었습니다.");
+		} catch (ExecutionException e) {
+			Throwable cause = e.getCause();
+			if (cause instanceof DataGsmException dge) {
+				log.warn("DataGSM OAuth error: status={}, message={}", dge.getStatusCode(), dge.getMessage());
+				throw new ResponseStatusException(resolveStatus(dge.getStatusCode()), "OAuth 인증에 실패했습니다.");
+			}
+			if (cause instanceof ResponseStatusException rse) {
+				throw rse;
+			}
+			log.error("OAuth 로그인 예외 발생", cause);
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "로그인 처리 중 오류가 발생했습니다.");
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "로그인 처리가 중단되었습니다.");
 		} catch (DataGsmException e) {
 			log.warn("DataGSM OAuth error: status={}, message={}", e.getStatusCode(), e.getMessage());
 			throw new ResponseStatusException(resolveStatus(e.getStatusCode()), "OAuth 인증에 실패했습니다.");
@@ -105,7 +127,7 @@ public class AuthService {
 	@Transactional
 	public OAuthSignInResponse refresh(RefreshTokenRequest request) {
 		String refreshToken = request.refreshToken();
-		
+
 		try {
 			jwtTokenProvider.parseClaims(refreshToken);
 		} catch (Exception e) {
@@ -173,4 +195,3 @@ public class AuthService {
 				.orElseGet(() -> userRepository.save(new UserEntity(email, name, studentNumber, role)));
 	}
 }
-
