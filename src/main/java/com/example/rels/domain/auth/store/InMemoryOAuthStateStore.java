@@ -28,10 +28,10 @@ public class InMemoryOAuthStateStore implements OAuthStateStore {
     }
 
     @Override
-    public Optional<LoginState> consume(String state) {
+    public Optional<LoginState> peek(String state) {
         cleanupExpiredStates();
 
-        StoredLoginState stored = stateStore.remove(state);
+        StoredLoginState stored = stateStore.get(state);
         if (stored == null || stored.expiresAt().isBefore(Instant.now())) {
             return Optional.empty();
         }
@@ -39,13 +39,18 @@ public class InMemoryOAuthStateStore implements OAuthStateStore {
         return Optional.of(new LoginState(stored.redirectUri(), stored.codeVerifier()));
     }
 
+    @Override
+    public void remove(String state) {
+        stateStore.remove(state);
+    }
+
     private void cleanupExpiredStates() {
         ExpiringState expired;
         while ((expired = expirationQueue.poll()) != null) {
             ExpiringState expiredState = expired;
             stateStore.computeIfPresent(
-                expiredState.state(),
-                (key, current) -> current.expiresAt().equals(expiredState.expiresAt()) ? null : current
+                    expiredState.state(),
+                    (key, current) -> current.expiresAt().equals(expiredState.expiresAt()) ? null : current
             );
         }
     }

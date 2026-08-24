@@ -24,7 +24,7 @@ public class DgOAuthFlowService {
 	private final OAuthStateStore oauthStateStore;
 
 	public DgOAuthFlowService(DataGsmOAuthClient dataGsmOAuthClient, AuthService authService,
-			OAuthStateStore oauthStateStore) {
+							  OAuthStateStore oauthStateStore) {
 		this.dataGsmOAuthClient = dataGsmOAuthClient;
 		this.authService = authService;
 		this.oauthStateStore = oauthStateStore;
@@ -47,10 +47,13 @@ public class DgOAuthFlowService {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "code/state 값이 필요합니다.");
 		}
 
-		OAuthStateStore.LoginState loginState = oauthStateStore.consume(state)
+		OAuthStateStore.LoginState loginState = oauthStateStore.peek(state)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "state가 유효하지 않거나 만료되었습니다."));
 
-		return authService.signIn(code, loginState.redirectUri(), loginState.codeVerifier());
+		OAuthSignInResponse response = authService.signIn(code, loginState.redirectUri(), loginState.codeVerifier());
+
+		oauthStateStore.remove(state);
+
+		return response;
 	}
 }
-
