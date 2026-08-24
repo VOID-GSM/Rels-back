@@ -7,7 +7,9 @@ public interface OAuthStateStore {
 
     void save(String state, String redirectUri, String codeVerifier, Duration ttl);
 
-    Optional<LoginState> consume(String state);
+    Optional<LoginState> peek(String state);
+
+    void remove(String state);
 
     record LoginState(String redirectUri, String codeVerifier) {
     }
