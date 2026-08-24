@@ -1,9 +1,6 @@
 FROM gradle:8.5-jdk21 AS builder
 WORKDIR /app
 
-COPY build.gradle settings.gradle /app/
-RUN gradle dependencies --no-daemon || true
-
 COPY . /app
 RUN ./gradlew bootJar -x test --no-daemon
 
