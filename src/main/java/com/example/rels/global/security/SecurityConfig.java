@@ -47,10 +47,19 @@ public class SecurityConfig {
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.authorizeHttpRequests(auth -> auth
 					.requestMatchers("/health").permitAll()
-					.requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+					// Swagger 및 API Docs 경로 접근 허용
+					.requestMatchers(
+							"/swagger-ui/**",
+							"/swagger-ui.html",
+							"/v3/api-docs/**",
+							"/swagger-resources/**",
+							"/webjars/**")
+					.permitAll()
 					.requestMatchers(HttpMethod.GET, "/api/auth/dg/start", "/api/auth/dg/callback").permitAll()
 					.requestMatchers(HttpMethod.POST, "/api/auth/signin").permitAll()
 					.requestMatchers("/error").permitAll()
+					// 기타 허용 경로
+					.requestMatchers("/", "/intro", "/signin", "/callback").permitAll()
 					.requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
 					.requestMatchers("/api/notices/**").authenticated()
 					.requestMatchers(HttpMethod.GET, "/api/lectures/discord", "/api/lectures/discord/**").permitAll()
