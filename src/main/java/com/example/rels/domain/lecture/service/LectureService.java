@@ -99,14 +99,16 @@ public class LectureService {
 	}
 
 	@Transactional(readOnly = true)
-	public LectureDetailResponse getLectureDetail(Long lectureId, Long userId) {
+	public LectureDetailResponse getLectureDetail(Long lectureId, Long userId, Role userRole) {
 		LectureEntity lecture = requireLecture(lectureId);
+		validateApprovalVisibility(lecture, userId, userRole);
 		return toLectureDetail(lecture, userId);
 	}
 
 	@Transactional(readOnly = true)
 	public LectureDetailResponse getLectureDetailForDiscord(Long lectureId) {
 		LectureEntity lecture = requireLecture(lectureId);
+		validateApprovalVisibility(lecture, null, null);
 		return toLectureDetail(lecture, null);
 	}
 
@@ -362,14 +364,31 @@ public class LectureService {
 		);
 	}
 
+	/** 승인되지 않은 강연은 개설자 본인과 학생회에게만 보인다. */
+	private void validateApprovalVisibility(LectureEntity lecture, Long viewerId, Role viewerRole) {
+		if (lecture.getApprovalStatus() == ApprovalStatus.APPROVED) {
+			return;
+		}
+		if (viewerRole == Role.ADMIN) {
+			return;
+		}
+		if (isCreator(lecture, viewerId)) {
+			return;
+		}
+		throw new ResponseStatusException(HttpStatus.FORBIDDEN, "아직 승인되지 않은 강연입니다.");
+	}
+
+	private boolean isCreator(LectureEntity lecture, Long viewerId) {
+		return viewerId != null && lecture.getCreator() != null
+				&& lecture.getCreator().getId().equals(viewerId);
+	}
+
 	/** 거절 사유는 개설자 본인에게만 내려준다. */
 	private String resolveRejectionReason(LectureEntity lecture, Long viewerId) {
 		if (lecture.getApprovalStatus() != ApprovalStatus.REJECTED) {
 			return null;
 		}
-		boolean isCreator = viewerId != null && lecture.getCreator() != null
-				&& lecture.getCreator().getId().equals(viewerId);
-		return isCreator ? lecture.getRejectionReason() : null;
+		return isCreator(lecture, viewerId) ? lecture.getRejectionReason() : null;
 	}
 
 	private UserEntity requireUser(Long userId) {

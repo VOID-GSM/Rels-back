@@ -78,7 +78,7 @@ public class LectureController {
 			@PathVariable Long lectureId,
 			@AuthenticationPrincipal AuthenticatedUser currentUser) {
 		AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		return lectureService.getLectureDetail(lectureId, authenticatedUser.userId());
+		return lectureService.getLectureDetail(lectureId, authenticatedUser.userId(), authenticatedUser.role());
 	}
 
 	@GetMapping("/discord/{lectureId}")
