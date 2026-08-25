@@ -1,9 +1,10 @@
 package com.example.rels.domain.lecture.controller;
 
 import com.example.rels.domain.lecture.dto.request.AttendanceUpdateRequest;
-import com.example.rels.domain.lecture.dto.response.*;
+import com.example.rels.domain.lecture.dto.request.LectureApprovalRequest;
 import com.example.rels.domain.lecture.dto.request.LectureCreateRequest;
 import com.example.rels.domain.lecture.dto.request.LectureUpdateRequest;
+import com.example.rels.domain.lecture.dto.response.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -21,7 +22,6 @@ import jakarta.validation.Valid;
 
 import java.util.List;
 
-
 @RestController
 @RequestMapping("/api/lectures")
 public class LectureController {
@@ -32,19 +32,37 @@ public class LectureController {
 		this.lectureService = lectureService;
 	}
 
-	   @PostMapping
-	   public ResponseEntity<LectureDetailResponse> createLecture(
-			   @AuthenticationPrincipal AuthenticatedUser currentUser,
-			   @Valid @RequestBody LectureCreateRequest request) {
-		   AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		   LectureDetailResponse response = lectureService.createLecture(authenticatedUser.userId(), request);
-		   return ResponseEntity.status(HttpStatus.CREATED).body(response);
-	   }
+	@PostMapping
+	public ResponseEntity<LectureDetailResponse> createLecture(
+			@AuthenticationPrincipal AuthenticatedUser currentUser,
+			@Valid @RequestBody LectureCreateRequest request) {
+		AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		LectureDetailResponse response = lectureService.createLecture(authenticatedUser.userId(), request);
+		return ResponseEntity.status(HttpStatus.CREATED).body(response);
+	}
 
 	@GetMapping
 	public Page<LectureSummaryResponse> getLectures(
 			@PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 		return lectureService.getLectures(pageable);
+	}
+
+	@GetMapping("/pending")
+	public Page<LectureSummaryResponse> getPendingLectures(
+			@AuthenticationPrincipal AuthenticatedUser currentUser,
+			@PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+		AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		return lectureService.getPendingLectures(authenticatedUser.role(), pageable);
+	}
+
+	@PatchMapping("/{lectureId}/approval")
+	public ResponseEntity<Void> updateLectureApproval(
+			@PathVariable Long lectureId,
+			@AuthenticationPrincipal AuthenticatedUser currentUser,
+			@Valid @RequestBody LectureApprovalRequest request) {
+		AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		lectureService.updateLectureApproval(lectureId, authenticatedUser.role(), request);
+		return ResponseEntity.ok().build();
 	}
 
 	@GetMapping("/discord")
@@ -67,14 +85,14 @@ public class LectureController {
 		return lectureService.getLectureDetailForDiscord(lectureId);
 	}
 
-	   @PatchMapping("/{lectureId}")
-	   public LectureDetailResponse updateLecture(
-			   @PathVariable Long lectureId,
-			   @AuthenticationPrincipal AuthenticatedUser currentUser,
-			   @Valid @RequestBody LectureUpdateRequest request) {
-		   AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		   return lectureService.updateLecture(lectureId, authenticatedUser.userId(), authenticatedUser.role(), request);
-	   }
+	@PatchMapping("/{lectureId}")
+	public LectureDetailResponse updateLecture(
+			@PathVariable Long lectureId,
+			@AuthenticationPrincipal AuthenticatedUser currentUser,
+			@Valid @RequestBody LectureUpdateRequest request) {
+		AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		return lectureService.updateLecture(lectureId, authenticatedUser.userId(), authenticatedUser.role(), request);
+	}
 
 	@DeleteMapping("/{lectureId}")
 	public ResponseEntity<Void> deleteLecture(
@@ -112,13 +130,6 @@ public class LectureController {
 		return lectureService.getMyLectures(authenticatedUser.userId());
 	}
 
-	private AuthenticatedUser requireUser(AuthenticatedUser currentUser) {
-		if (currentUser == null) {
-			throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증 정보가 필요합니다.");
-		}
-		return currentUser;
-	}
-
 	@GetMapping("/{lectureId}/attendances")
 	public List<LectureAttendanceResponse> getAttendanceList(
 			@PathVariable Long lectureId,
@@ -136,5 +147,11 @@ public class LectureController {
 		lectureService.updateAttendances(lectureId, authenticatedUser.userId(), authenticatedUser.role(), requests);
 		return ResponseEntity.ok().build();
 	}
-}
 
+	private AuthenticatedUser requireUser(AuthenticatedUser currentUser) {
+		if (currentUser == null) {
+			throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증 정보가 필요합니다.");
+		}
+		return currentUser;
+	}
+}
