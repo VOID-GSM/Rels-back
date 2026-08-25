@@ -1,4 +1,4 @@
-package com.example.rels.domain.lecture.dto;
+package com.example.rels.domain.lecture.dto.request;
 
 
 
@@ -13,7 +13,7 @@ import java.time.LocalTime;
 import java.util.Map;
 
 
-public record LectureUpdateRequest(
+public record LectureCreateRequest(
 	@NotBlank @Size(max = 100) String title,
 	@NotBlank @Size(max = 800) String description,
 	Map<@NotNull @Min(1) @Max(3) Integer, @NotNull @Min(0) Integer> capacityByGrade,
