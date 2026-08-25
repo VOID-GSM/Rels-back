@@ -2,6 +2,7 @@ package com.example.rels.lecture.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -36,6 +37,7 @@ import com.example.rels.domain.lecture.dto.request.LectureUpdateRequest;
 import com.example.rels.domain.lecture.dto.response.EnrollmentResponse;
 import com.example.rels.domain.lecture.dto.response.LectureDetailResponse;
 import com.example.rels.domain.lecture.dto.response.LectureSummaryResponse;
+import com.example.rels.domain.lecture.dto.response.MyLecturesResponse;
 import com.example.rels.domain.lecture.entity.ApprovalStatus;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
 import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
@@ -96,11 +98,11 @@ class LectureServiceTest {
 		when(waitingCount.getEnrollmentCount()).thenReturn(1L);
 
 		Pageable pageable = PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "createdAt"));
-		when(lectureRepository.findAllByApprovalStatusOrderByCreatedAtDesc(eq(ApprovalStatus.APPROVED), any()))
+		when(lectureRepository.findAllByApprovalStatusOrCreatorIdOrderByCreatedAtDesc(eq(ApprovalStatus.APPROVED), eq(2L), any()))
 				.thenReturn(new PageImpl<>(List.of(firstLecture, secondLecture), pageable, 2));
 		when(lectureEnrollmentRepository.countEnrollmentsByLectureIds(List.of(11L, 12L))).thenReturn(List.of(enrolledCount, waitingCount));
 
-		Page<LectureSummaryResponse> lectures = lectureService.getLectures(pageable);
+		Page<LectureSummaryResponse> lectures = lectureService.getLectures(pageable, 2L);
 
 		assertEquals(2, lectures.getTotalElements());
 		assertEquals(2, lectures.getContent().size());
@@ -133,11 +135,11 @@ class LectureServiceTest {
 		when(waitingCount.getEnrollmentCount()).thenReturn(0L);
 
 		Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
-		when(lectureRepository.findAllByApprovalStatusOrderByCreatedAtDesc(eq(ApprovalStatus.APPROVED), any()))
+		when(lectureRepository.findAllByApprovalStatusOrCreatorIdOrderByCreatedAtDesc(eq(ApprovalStatus.APPROVED), eq(2L), any()))
 				.thenReturn(new PageImpl<>(List.of(endedLecture), pageable, 1));
 		when(lectureEnrollmentRepository.countEnrollmentsByLectureIds(List.of(11L))).thenReturn(List.of(enrolledCount, waitingCount));
 
-		Page<LectureSummaryResponse> lectures = lectureService.getLectures(pageable);
+		Page<LectureSummaryResponse> lectures = lectureService.getLectures(pageable, 2L);
 
 		assertEquals(LectureStatus.CLOSE.name(), lectures.getContent().getFirst().lectureStatus());
 	}
@@ -149,13 +151,14 @@ class LectureServiceTest {
 
 		LectureEntity endedLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().minusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(endedLecture, 11L);
+		setApprovalStatus(endedLecture, ApprovalStatus.APPROVED);
 
 		when(lectureRepository.findById(11L)).thenReturn(Optional.of(endedLecture));
 		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
 		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.WAITING)).thenReturn(0L);
 		when(lectureEnrollmentRepository.findByLectureIdAndUserId(11L, 2L)).thenReturn(Optional.empty());
 
-		LectureDetailResponse response = lectureService.getLectureDetail(11L, 2L);
+		LectureDetailResponse response = lectureService.getLectureDetail(11L, 2L, Role.USER);
 
 		assertEquals(LectureStatus.CLOSE.name(), response.lectureStatus());
 		assertEquals(LectureStatus.CLOSE, endedLecture.getStatus());
@@ -477,5 +480,132 @@ class LectureServiceTest {
 
 		verify(lectureEnrollmentRepository).deleteByLectureId(1L);
 		verify(lectureRepository).delete(lecture);
+	}
+
+	@Test
+	void getLecturesIncludesOwnPendingLecture() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator);
+
+		LectureEntity pendingLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
+		setId(pendingLecture, 11L);
+
+		Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+		when(lectureRepository.findAllByApprovalStatusOrCreatorIdOrderByCreatedAtDesc(eq(ApprovalStatus.APPROVED), eq(1L), any()))
+				.thenReturn(new PageImpl<>(List.of(pendingLecture), pageable, 1));
+		when(lectureEnrollmentRepository.countEnrollmentsByLectureIds(List.of(11L))).thenReturn(List.of());
+
+		Page<LectureSummaryResponse> lectures = lectureService.getLectures(pageable, 1L);
+
+		assertEquals(ApprovalStatus.PENDING.name(), lectures.getContent().getFirst().approvalStatus());
+	}
+
+	@Test
+	void getLecturesExposesRejectionReasonToCreatorOnly() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator);
+
+		LectureEntity rejectedLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
+		setId(rejectedLecture, 11L);
+		rejectedLecture.updateApprovalStatus(ApprovalStatus.REJECTED, "같은 시간대에 다른 강연이 있습니다.");
+
+		Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+		when(lectureRepository.findAllByApprovalStatusOrCreatorIdOrderByCreatedAtDesc(eq(ApprovalStatus.APPROVED), eq(1L), any()))
+				.thenReturn(new PageImpl<>(List.of(rejectedLecture), pageable, 1));
+		when(lectureEnrollmentRepository.countEnrollmentsByLectureIds(List.of(11L))).thenReturn(List.of());
+
+		LectureSummaryResponse forCreator = lectureService.getLectures(pageable, 1L).getContent().getFirst();
+
+		assertEquals(ApprovalStatus.REJECTED.name(), forCreator.approvalStatus());
+		assertEquals("같은 시간대에 다른 강연이 있습니다.", forCreator.rejectionReason());
+	}
+
+	@Test
+	void getLectureDetailExposesRejectionReasonToCreator() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator);
+
+		LectureEntity rejectedLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
+		setId(rejectedLecture, 11L);
+		rejectedLecture.updateApprovalStatus(ApprovalStatus.REJECTED, "같은 시간대에 다른 강연이 있습니다.");
+
+		when(lectureRepository.findById(11L)).thenReturn(Optional.of(rejectedLecture));
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.WAITING)).thenReturn(0L);
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(11L, 1L)).thenReturn(Optional.empty());
+
+		LectureDetailResponse forCreator = lectureService.getLectureDetail(11L, 1L, Role.USER);
+
+		assertEquals(ApprovalStatus.REJECTED.name(), forCreator.approvalStatus());
+		assertEquals("같은 시간대에 다른 강연이 있습니다.", forCreator.rejectionReason());
+	}
+
+	@Test
+	void getLectureDetailHidesUnapprovedLectureFromOtherUser() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator);
+
+		LectureEntity pendingLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
+		setId(pendingLecture, 11L);
+
+		when(lectureRepository.findById(11L)).thenReturn(Optional.of(pendingLecture));
+
+		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class,
+				() -> lectureService.getLectureDetail(11L, 2L, Role.USER));
+
+		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+	}
+
+	@Test
+	void getLectureDetailAllowsAdminToViewUnapprovedLecture() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator);
+
+		LectureEntity pendingLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
+		setId(pendingLecture, 11L);
+
+		when(lectureRepository.findById(11L)).thenReturn(Optional.of(pendingLecture));
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.WAITING)).thenReturn(0L);
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(11L, 2L)).thenReturn(Optional.empty());
+
+		LectureDetailResponse response = lectureService.getLectureDetail(11L, 2L, Role.ADMIN);
+
+		assertEquals(ApprovalStatus.PENDING.name(), response.approvalStatus());
+	}
+
+	@Test
+	void getLectureDetailForDiscordHidesUnapprovedLecture() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator);
+
+		LectureEntity pendingLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
+		setId(pendingLecture, 11L);
+
+		when(lectureRepository.findById(11L)).thenReturn(Optional.of(pendingLecture));
+
+		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class,
+				() -> lectureService.getLectureDetailForDiscord(11L));
+
+		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+	}
+
+	@Test
+	void getMyLecturesExposesApprovalStatusAndRejectionReason() {
+		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
+		setId(creator);
+
+		LectureEntity rejectedLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
+		setId(rejectedLecture, 11L);
+		rejectedLecture.updateApprovalStatus(ApprovalStatus.REJECTED, "정원이 너무 적습니다.");
+
+		when(userRepository.findById(1L)).thenReturn(Optional.of(creator));
+		when(lectureEnrollmentRepository.findAllByUserId(1L)).thenReturn(List.of());
+		when(lectureRepository.findAllByCreatorIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(rejectedLecture));
+
+		MyLecturesResponse response = lectureService.getMyLectures(1L);
+
+		assertEquals(ApprovalStatus.REJECTED.name(), response.createdLectures().getFirst().approvalStatus());
+		assertEquals("정원이 너무 적습니다.", response.createdLectures().getFirst().rejectionReason());
 	}
 }
