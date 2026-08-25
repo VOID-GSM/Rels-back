@@ -1,7 +1,12 @@
 package com.example.rels.domain.lecture.controller;
 
-import com.example.rels.domain.auth.dto.MyLecturesResponse;
-import com.example.rels.domain.lecture.dto.*;
+import com.example.rels.domain.lecture.dto.response.MyLecturesResponse;
+import com.example.rels.domain.lecture.dto.request.LectureCreateRequest;
+import com.example.rels.domain.lecture.dto.request.LectureUpdateRequest;
+import com.example.rels.domain.lecture.dto.response.EnrollmentListResponse;
+import com.example.rels.domain.lecture.dto.response.EnrollmentResponse;
+import com.example.rels.domain.lecture.dto.response.LectureDetailResponse;
+import com.example.rels.domain.lecture.dto.response.LectureSummaryResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -57,7 +62,6 @@ public class LectureController {
 		return lectureService.getLectureDetail(lectureId, authenticatedUser.userId());
 	}
 
-	// Public endpoint for Discord bot usage - does not require authentication
 	@GetMapping("/discord/{lectureId}")
 	public LectureDetailResponse getLectureDetailForDiscord(
 			@PathVariable Long lectureId) {
