@@ -80,5 +80,25 @@ public class LectureEnrollmentEntity {
 	public void promoteToEnrolled() {
 		this.status = EnrollmentStatus.ENROLLED;
 	}
+
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false)
+	private AttendanceStatus attendanceStatus = AttendanceStatus.NONE;
+
+	@Column(name = "attended_at")
+	private LocalDateTime attendedAt;
+
+	public AttendanceStatus getAttendanceStatus() {
+		return attendanceStatus;
+	}
+
+	public LocalDateTime getAttendedAt() {
+		return attendedAt;
+	}
+
+	public void updateAttendance(AttendanceStatus status) {
+		this.attendanceStatus = status;
+		this.attendedAt = (status == AttendanceStatus.NONE) ? null : LocalDateTime.now();
+	}
 }
 
