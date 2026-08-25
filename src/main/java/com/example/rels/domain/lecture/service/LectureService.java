@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.example.rels.domain.lecture.dto.request.AttendanceUpdateRequest;
 import com.example.rels.domain.lecture.dto.response.MyCreatedLectureResponse;
 import com.example.rels.domain.lecture.dto.response.MyEnrolledLectureResponse;
 import com.example.rels.domain.lecture.dto.response.MyLecturesResponse;
@@ -489,5 +490,47 @@ public class LectureService {
 		return new MyLecturesResponse(enrolledLectures, createdLectures);
 	}
 
+	@Transactional(readOnly = true)
+	public List<LectureAttendanceResponse> getAttendanceList(Long lectureId, Long currentUserId, Role currentUserRole) {
+		LectureEntity lecture = requireLecture(lectureId);
+		validateCreatorOrAdmin(lecture, currentUserId, currentUserRole);
+
+		return lectureEnrollmentRepository.findAllByLectureId(lectureId).stream()
+				.filter(e -> e.getStatus() == EnrollmentStatus.ENROLLED)
+				.map(e -> new LectureAttendanceResponse(
+						e.getUser().getId(),
+						e.getUser().getName(),
+						e.getUser().getStudentNumber(),
+						e.getAttendanceStatus(),
+						e.getAttendedAt()
+				))
+				.toList();
+	}
+
+	@Transactional
+	public void updateAttendances(Long lectureId, Long currentUserId, Role currentUserRole, List<AttendanceUpdateRequest> requests) {
+		LectureEntity lecture = requireLecture(lectureId);
+		validateCreatorOrAdmin(lecture, currentUserId, currentUserRole);
+
+		for (AttendanceUpdateRequest req : requests) {
+			LectureEnrollmentEntity enrollment = lectureEnrollmentRepository.findByLectureIdAndUserId(lectureId, req.userId())
+					.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "수강 신청 내역이 없습니다. User ID: " + req.userId()));
+
+			if (enrollment.getStatus() != EnrollmentStatus.ENROLLED) {
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "승인된 수강생만 출석을 변경할 수 있습니다.");
+			}
+
+			enrollment.updateAttendance(req.attendanceStatus());
+		}
+	}
+
+	private void validateCreatorOrAdmin(LectureEntity lecture, Long userId, Role userRole) {
+		if (userRole == Role.ADMIN) {
+			return;
+		}
+		if (lecture.getCreator() == null || !lecture.getCreator().getId().equals(userId)) {
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "강의 작성자 또는 관리자만 접근 가능합니다.");
+		}
+	}
 }
 
