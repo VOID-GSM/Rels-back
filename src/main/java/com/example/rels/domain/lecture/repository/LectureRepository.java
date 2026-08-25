@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
+import com.example.rels.domain.lecture.entity.ApprovalStatus;
 import com.example.rels.domain.lecture.entity.LectureEntity;
 
 import jakarta.persistence.LockModeType;
@@ -19,10 +20,12 @@ public interface LectureRepository extends JpaRepository<LectureEntity, Long> {
 	@EntityGraph(attributePaths = "creator")
 	Page<LectureEntity> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
+	@EntityGraph(attributePaths = "creator")
+	Page<LectureEntity> findAllByApprovalStatusOrderByCreatedAtDesc(ApprovalStatus approvalStatus, Pageable pageable);
+
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select l from LectureEntity l where l.id = :lectureId")
 	Optional<LectureEntity> findByIdForUpdate(Long lectureId);
 
 	List<LectureEntity> findAllByCreatorIdOrderByCreatedAtDesc(Long creatorId);
 }
-
