@@ -1,7 +1,9 @@
 package com.example.rels.domain.lecture.controller;
 
-import com.example.rels.domain.auth.dto.MyLecturesResponse;
-import com.example.rels.domain.lecture.dto.*;
+import com.example.rels.domain.lecture.dto.request.AttendanceUpdateRequest;
+import com.example.rels.domain.lecture.dto.response.*;
+import com.example.rels.domain.lecture.dto.request.LectureCreateRequest;
+import com.example.rels.domain.lecture.dto.request.LectureUpdateRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -16,6 +18,8 @@ import com.example.rels.global.security.AuthenticatedUser;
 import com.example.rels.domain.lecture.service.LectureService;
 
 import jakarta.validation.Valid;
+
+import java.util.List;
 
 
 @RestController
@@ -57,7 +61,6 @@ public class LectureController {
 		return lectureService.getLectureDetail(lectureId, authenticatedUser.userId());
 	}
 
-	// Public endpoint for Discord bot usage - does not require authentication
 	@GetMapping("/discord/{lectureId}")
 	public LectureDetailResponse getLectureDetailForDiscord(
 			@PathVariable Long lectureId) {
@@ -114,6 +117,24 @@ public class LectureController {
 			throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증 정보가 필요합니다.");
 		}
 		return currentUser;
+	}
+
+	@GetMapping("/{lectureId}/attendances")
+	public List<LectureAttendanceResponse> getAttendanceList(
+			@PathVariable Long lectureId,
+			@AuthenticationPrincipal AuthenticatedUser currentUser) {
+		AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		return lectureService.getAttendanceList(lectureId, authenticatedUser.userId(), authenticatedUser.role());
+	}
+
+	@PatchMapping("/{lectureId}/attendances")
+	public ResponseEntity<Void> updateAttendances(
+			@PathVariable Long lectureId,
+			@AuthenticationPrincipal AuthenticatedUser currentUser,
+			@Valid @RequestBody List<AttendanceUpdateRequest> requests) {
+		AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		lectureService.updateAttendances(lectureId, authenticatedUser.userId(), authenticatedUser.role(), requests);
+		return ResponseEntity.ok().build();
 	}
 }
 

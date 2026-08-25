@@ -47,7 +47,6 @@ public class SecurityConfig {
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.authorizeHttpRequests(auth -> auth
 					.requestMatchers("/health").permitAll()
-					// Swagger 및 API Docs 경로 접근 허용
 					.requestMatchers(
 							"/swagger-ui/**",
 							"/swagger-ui.html",
