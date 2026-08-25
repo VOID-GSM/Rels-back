@@ -4,40 +4,39 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import java.time.LocalDate;
 import java.lang.reflect.Field;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.time.LocalDateTime;
 
-import com.example.rels.domain.lecture.service.LectureService;
-import org.springframework.http.HttpStatus;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 
-import com.example.rels.domain.user.entity.Role;
-import com.example.rels.domain.user.entity.UserEntity;
-import com.example.rels.domain.user.repository.UserRepository;
-import com.example.rels.domain.lecture.dto.response.EnrollmentResponse;
 import com.example.rels.domain.lecture.dto.request.LectureCreateRequest;
 import com.example.rels.domain.lecture.dto.request.LectureUpdateRequest;
+import com.example.rels.domain.lecture.dto.response.EnrollmentResponse;
 import com.example.rels.domain.lecture.dto.response.LectureDetailResponse;
 import com.example.rels.domain.lecture.dto.response.LectureSummaryResponse;
+import com.example.rels.domain.lecture.entity.ApprovalStatus;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
 import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
 import com.example.rels.domain.lecture.entity.LectureEntity;
@@ -45,6 +44,10 @@ import com.example.rels.domain.lecture.entity.LectureStatus;
 import com.example.rels.domain.lecture.repository.LectureEnrollmentCountProjection;
 import com.example.rels.domain.lecture.repository.LectureEnrollmentRepository;
 import com.example.rels.domain.lecture.repository.LectureRepository;
+import com.example.rels.domain.lecture.service.LectureService;
+import com.example.rels.domain.user.entity.Role;
+import com.example.rels.domain.user.entity.UserEntity;
+import com.example.rels.domain.user.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
 class LectureServiceTest {
@@ -64,12 +67,10 @@ class LectureServiceTest {
 	void setUp() {
 		lectureService = new LectureService(lectureRepository, lectureEnrollmentRepository, userRepository);
 
-		// 기본적으로 save 호출은 mocked enrollment 객체를 반환하도록 설정해서
-		// 서비스에서 savedEnrollment.getRequestedAt() 호출 시 NPE가 발생하지 않도록 함
 		LectureEnrollmentEntity savedMock = org.mockito.Mockito.mock(LectureEnrollmentEntity.class);
 		org.mockito.Mockito.lenient().when(savedMock.getRequestedAt()).thenReturn(LocalDateTime.now());
 		org.mockito.Mockito.lenient().when(lectureEnrollmentRepository.save(org.mockito.ArgumentMatchers.any(LectureEnrollmentEntity.class)))
-			.thenReturn(savedMock);
+				.thenReturn(savedMock);
 	}
 
 	@Test
@@ -81,6 +82,8 @@ class LectureServiceTest {
 		LectureEntity secondLecture = new LectureEntity("title2", "description2", creator, "장소2", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(firstLecture, 11L);
 		setId(secondLecture, 12L);
+		setApprovalStatus(firstLecture, ApprovalStatus.APPROVED);
+		setApprovalStatus(secondLecture, ApprovalStatus.APPROVED);
 
 		LectureEnrollmentCountProjection enrolledCount = org.mockito.Mockito.mock(LectureEnrollmentCountProjection.class);
 		when(enrolledCount.getLectureId()).thenReturn(11L);
@@ -93,7 +96,7 @@ class LectureServiceTest {
 		when(waitingCount.getEnrollmentCount()).thenReturn(1L);
 
 		Pageable pageable = PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "createdAt"));
-		when(lectureRepository.findAllByOrderByCreatedAtDesc(pageable))
+		when(lectureRepository.findAllByApprovalStatusOrderByCreatedAtDesc(eq(ApprovalStatus.APPROVED), any()))
 				.thenReturn(new PageImpl<>(List.of(firstLecture, secondLecture), pageable, 2));
 		when(lectureEnrollmentRepository.countEnrollmentsByLectureIds(List.of(11L, 12L))).thenReturn(List.of(enrolledCount, waitingCount));
 
@@ -117,6 +120,7 @@ class LectureServiceTest {
 
 		LectureEntity endedLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().minusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(endedLecture, 11L);
+		setApprovalStatus(endedLecture, ApprovalStatus.APPROVED);
 
 		LectureEnrollmentCountProjection enrolledCount = org.mockito.Mockito.mock(LectureEnrollmentCountProjection.class);
 		when(enrolledCount.getLectureId()).thenReturn(11L);
@@ -129,7 +133,7 @@ class LectureServiceTest {
 		when(waitingCount.getEnrollmentCount()).thenReturn(0L);
 
 		Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
-		when(lectureRepository.findAllByOrderByCreatedAtDesc(pageable))
+		when(lectureRepository.findAllByApprovalStatusOrderByCreatedAtDesc(eq(ApprovalStatus.APPROVED), any()))
 				.thenReturn(new PageImpl<>(List.of(endedLecture), pageable, 1));
 		when(lectureEnrollmentRepository.countEnrollmentsByLectureIds(List.of(11L))).thenReturn(List.of(enrolledCount, waitingCount));
 
@@ -161,6 +165,7 @@ class LectureServiceTest {
 	void enrollRejectsEndedLecture() {
 		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", LocalDate.now().minusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(lecture, 1L);
+		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
 
 		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
 
@@ -173,6 +178,7 @@ class LectureServiceTest {
 	@Test
 	void enrollConfirmsLectureAtThreshold() {
 		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now().plusDays(1), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), 30);
+		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
 		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
@@ -199,6 +205,7 @@ class LectureServiceTest {
 	@Test
 	void enrollConfirmsLectureAboveThreshold() {
 		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now().plusDays(1), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), 30);
+		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
 		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
@@ -241,6 +248,7 @@ class LectureServiceTest {
 	@Test
 	void enrollMovesToWaitingAfterCapacity() {
 		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now().plusDays(1), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), 30);
+		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
 		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
@@ -266,6 +274,7 @@ class LectureServiceTest {
 	void cancelPromotesFirstWaitingUser() {
 		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(lecture, 1L);
+		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 		UserEntity waitingUser = new UserEntity("wait@test.com", "wait", "1000000002", Role.USER);
 
@@ -296,6 +305,20 @@ class LectureServiceTest {
 			field.set(lecture, id);
 		} catch (ReflectiveOperationException e) {
 			throw new IllegalStateException("id 설정 실패", e);
+		}
+	}
+
+	private void setApprovalStatus(LectureEntity lecture, ApprovalStatus status) {
+		try {
+			Field field = LectureEntity.class.getDeclaredField("approvalStatus");
+			field.setAccessible(true);
+			field.set(lecture, status);
+		} catch (ReflectiveOperationException e) {
+			try {
+				lecture.updateApprovalStatus(status, null);
+			} catch (Exception ex) {
+				throw new IllegalStateException("approvalStatus 설정 실패", ex);
+			}
 		}
 	}
 
@@ -386,8 +409,8 @@ class LectureServiceTest {
 
 		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
 
-		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class, 
-			() -> lectureService.updateLecture(1L, 2L, Role.USER, request));
+		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class,
+				() -> lectureService.updateLecture(1L, 2L, Role.USER, request));
 
 		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
 	}
@@ -404,8 +427,8 @@ class LectureServiceTest {
 
 		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
 
-		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class, 
-			() -> lectureService.deleteLecture(1L, 2L, Role.USER));
+		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class,
+				() -> lectureService.deleteLecture(1L, 2L, Role.USER));
 
 		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
 	}
@@ -456,4 +479,3 @@ class LectureServiceTest {
 		verify(lectureRepository).delete(lecture);
 	}
 }
-
