@@ -8,6 +8,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -39,14 +40,16 @@ public class LectureController {
 
 	@GetMapping
 	public Page<LectureSummaryResponse> getLectures(
+			@AuthenticationPrincipal AuthenticatedUser currentUser,
 			@PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-		return lectureService.getLectures(pageable);
+		AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		return lectureService.getLectures(pageable, authenticatedUser.userId(), authenticatedUser.role());
 	}
 
 	@GetMapping("/discord")
 	public Page<LectureSummaryResponse> getLecturesForDiscord(
 			@PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-		return lectureService.getLectures(pageable);
+		return lectureService.getLectures(pageable, null, null);
 	}
 
 	@GetMapping("/{lectureId}")
@@ -54,7 +57,7 @@ public class LectureController {
 			@PathVariable Long lectureId,
 			@AuthenticationPrincipal AuthenticatedUser currentUser) {
 		AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		return lectureService.getLectureDetail(lectureId, authenticatedUser.userId());
+		return lectureService.getLectureDetail(lectureId, authenticatedUser.userId(), authenticatedUser.role());
 	}
 
 	// Public endpoint for Discord bot usage - does not require authentication
@@ -72,6 +75,25 @@ public class LectureController {
 		   AuthenticatedUser authenticatedUser = requireUser(currentUser);
 		   return lectureService.updateLecture(lectureId, authenticatedUser.userId(), authenticatedUser.role(), request);
 	   }
+
+	@PostMapping("/{lectureId}/approval")
+	@PreAuthorize("hasRole('ADMIN')")
+	public LectureDetailResponse approveLecture(
+			@PathVariable Long lectureId,
+			@AuthenticationPrincipal AuthenticatedUser currentUser) {
+		AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		return lectureService.approveLecture(lectureId, authenticatedUser.userId());
+	}
+
+	@PostMapping("/{lectureId}/rejection")
+	@PreAuthorize("hasRole('ADMIN')")
+	public LectureDetailResponse rejectLecture(
+			@PathVariable Long lectureId,
+			@AuthenticationPrincipal AuthenticatedUser currentUser,
+			@Valid @RequestBody LectureRejectRequest request) {
+		AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		return lectureService.rejectLecture(lectureId, authenticatedUser.userId(), request.rejectionReason());
+	}
 
 	@DeleteMapping("/{lectureId}")
 	public ResponseEntity<Void> deleteLecture(

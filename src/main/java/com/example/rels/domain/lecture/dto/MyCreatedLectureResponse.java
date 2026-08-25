@@ -8,6 +8,8 @@ public record MyCreatedLectureResponse(
 		Long lectureId,
 		String title,
 		String lectureStatus,
+		String approvalStatus,
+		String rejectionReason,
 		String lectureLocation,
 		LocalDate lectureDate,
 		LocalTime lectureTime,

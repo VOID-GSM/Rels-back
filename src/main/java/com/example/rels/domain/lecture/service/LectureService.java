@@ -20,6 +20,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.example.rels.domain.user.entity.Role;
 import com.example.rels.domain.user.entity.UserEntity;
 import com.example.rels.domain.user.repository.UserRepository;
+import com.example.rels.domain.lecture.entity.ApprovalStatus;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
 import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
 import com.example.rels.domain.lecture.entity.LectureEntity;
@@ -63,27 +64,49 @@ public class LectureService {
     );
     lecture.setCapacityByGrade(request.capacityByGrade());
     lecture = lectureRepository.save(lecture);
-    return toLectureDetail(lecture, userId);
+    return toLectureDetail(lecture, userId, null);
 	   }
 
+	/**
+	 * 학생회(ADMIN)는 모든 강의를, 일반 사용자는 승인된 강의와 본인이 개설한 강의를 함께 조회한다.
+	 * viewerId가 null이면(디스코드 등 비로그인 조회) 승인된 강의만 반환한다.
+	 */
 	@Transactional(readOnly = true)
-	public Page<LectureSummaryResponse> getLectures(Pageable pageable) {
-		Page<LectureEntity> lectures = lectureRepository.findAllByOrderByCreatedAtDesc(pageable);
+	public Page<LectureSummaryResponse> getLectures(Pageable pageable, Long viewerId, Role viewerRole) {
+		Page<LectureEntity> lectures = viewerRole == Role.ADMIN
+				? lectureRepository.findAllByOrderByCreatedAtDesc(pageable)
+				: lectureRepository.findAllVisibleTo(viewerId, pageable);
 		Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId = getEnrollmentCountsByLectureIds(lectures.getContent());
 
-		return lectures.map(lecture -> toLectureSummary(lecture, enrollmentCountsByLectureId));
+		return lectures.map(lecture -> toLectureSummary(lecture, enrollmentCountsByLectureId, viewerId, viewerRole));
 	}
 
 	@Transactional(readOnly = true)
-	public LectureDetailResponse getLectureDetail(Long lectureId, Long userId) {
+	public LectureDetailResponse getLectureDetail(Long lectureId, Long userId, Role userRole) {
 		LectureEntity lecture = requireLecture(lectureId);
-		return toLectureDetail(lecture, userId);
+		validateApprovalVisibility(lecture, userId, userRole);
+		return toLectureDetail(lecture, userId, userRole);
 	}
 
 	@Transactional(readOnly = true)
 	public LectureDetailResponse getLectureDetailForDiscord(Long lectureId) {
 		LectureEntity lecture = requireLecture(lectureId);
-		return toLectureDetail(lecture, null);
+		validateApprovalVisibility(lecture, null, null);
+		return toLectureDetail(lecture, null, null);
+	}
+
+	@Transactional
+	public LectureDetailResponse approveLecture(Long lectureId, Long reviewerId) {
+		LectureEntity lecture = requireLecture(lectureId);
+		lecture.approve();
+		return toLectureDetail(lecture, reviewerId, Role.ADMIN);
+	}
+
+	@Transactional
+	public LectureDetailResponse rejectLecture(Long lectureId, Long reviewerId, String rejectionReason) {
+		LectureEntity lecture = requireLecture(lectureId);
+		lecture.reject(rejectionReason);
+		return toLectureDetail(lecture, reviewerId, Role.ADMIN);
 	}
 
 	@Transactional
@@ -104,7 +127,7 @@ public class LectureService {
 				request.applicationDeadline()
 		);
 
-		return toLectureDetail(lecture, userId);
+		return toLectureDetail(lecture, userId, userRole);
 	}
 
 	@Transactional
@@ -120,6 +143,9 @@ public class LectureService {
 	public EnrollmentResponse enroll(Long lectureId, Long userId) {
 		LectureEntity lecture = requireLectureForUpdate(lectureId);
 		refreshLectureLifecycle(lecture, LocalDateTime.now());
+		if (!lecture.isApproved()) {
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "아직 학생회 승인이 완료되지 않은 강의입니다.");
+		}
 		if (lecture.getStatus() == LectureStatus.CLOSE) {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "이미 종료된 강의입니다.");
 		}
@@ -246,7 +272,7 @@ public class LectureService {
 	}
 
 	private LectureSummaryResponse toLectureSummary(LectureEntity lecture,
-			Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId) {
+			Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId, Long viewerId, Role viewerRole) {
 		if (lecture.getCreator() == null) {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
 		}
@@ -262,6 +288,8 @@ public class LectureService {
 				lecture.getCreator().getName(),
 				lecture.getCreator().getStudentNumber(),
 				lecture.getStatus().name(),
+				lecture.getApprovalStatus().name(),
+				resolveRejectionReason(lecture, viewerId, viewerRole),
 				enrolledCount,
 				waitingCount,
 				lecture.getLectureLocation(),
@@ -297,7 +325,7 @@ public class LectureService {
 				.getOrDefault(status, 0L);
 	}
 
-	private LectureDetailResponse toLectureDetail(LectureEntity lecture, Long userId) {
+	private LectureDetailResponse toLectureDetail(LectureEntity lecture, Long userId, Role userRole) {
 		if (lecture.getCreator() == null) {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
 		}
@@ -317,6 +345,8 @@ public class LectureService {
 				lecture.getCreator().getName(),
 				lecture.getCreator().getStudentNumber(),
 				lecture.getStatus().name(),
+				lecture.getApprovalStatus().name(),
+				resolveRejectionReason(lecture, userId, userRole),
 				enrolledCount,
 				waitingCount,
 				myEnrollmentStatus,
@@ -328,6 +358,32 @@ public class LectureService {
 				lecture.getCapacityByGrade(),
 				lecture.getTotalCapacity()
 		);
+	}
+
+	/** 개설자 본인과 학생회(ADMIN)만 승인 관련 상세 정보(거절 사유)를 볼 수 있다. */
+	private boolean canViewApprovalDetail(LectureEntity lecture, Long userId, Role userRole) {
+		if (userRole == Role.ADMIN) {
+			return true;
+		}
+		return userId != null && lecture.getCreator() != null && lecture.getCreator().getId().equals(userId);
+	}
+
+	private String resolveRejectionReason(LectureEntity lecture, Long userId, Role userRole) {
+		if (lecture.getApprovalStatus() != ApprovalStatus.REJECTED) {
+			return null;
+		}
+		return canViewApprovalDetail(lecture, userId, userRole) ? lecture.getRejectionReason() : null;
+	}
+
+	/** 승인되지 않은 강의는 개설자 본인과 학생회에게만 보인다. */
+	private void validateApprovalVisibility(LectureEntity lecture, Long userId, Role userRole) {
+		if (lecture.isApproved()) {
+			return;
+		}
+		if (canViewApprovalDetail(lecture, userId, userRole)) {
+			return;
+		}
+		throw new ResponseStatusException(HttpStatus.FORBIDDEN, "아직 학생회 승인이 완료되지 않은 강의입니다.");
 	}
 
 	private UserEntity requireUser(Long userId) {
@@ -476,6 +532,8 @@ public class LectureService {
 						lecture.getId(),
 						lecture.getTitle(),
 						lecture.getStatus().name(),
+						lecture.getApprovalStatus().name(),
+						lecture.getRejectionReason(),
 						lecture.getLectureLocation(),
 						lecture.getLectureDate(),
 						lecture.getLectureTime(),

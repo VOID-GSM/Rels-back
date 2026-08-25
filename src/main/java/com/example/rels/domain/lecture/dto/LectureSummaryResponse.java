@@ -14,6 +14,8 @@ public record LectureSummaryResponse(
 		String creatorName,
 		String creatorStudentNumber,
 		String lectureStatus,
+		String approvalStatus,
+		String rejectionReason,
 		long enrolledCount,
 		long waitingCount,
 		String lectureLocation,

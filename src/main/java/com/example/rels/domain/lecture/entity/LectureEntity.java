@@ -54,6 +54,16 @@ public class LectureEntity {
 	@Column(nullable = false)
 	private LectureStatus status;
 
+	@Enumerated(EnumType.STRING)
+	@Column(name = "approval_status", length = 20)
+	private ApprovalStatus approvalStatus;
+
+	@Column(name = "rejection_reason", length = 500)
+	private String rejectionReason;
+
+	@Column(name = "reviewed_at")
+	private LocalDateTime reviewedAt;
+
 	@Column(name = "lecture_location", length = 255)
 	private String lectureLocation;
 
@@ -85,6 +95,7 @@ public class LectureEntity {
 		this.description = description;
 		this.creator = creator;
 		this.status = LectureStatus.OPEN;
+		this.approvalStatus = ApprovalStatus.PENDING;
 		this.capacityByGrade = new HashMap<>();
 		this.lectureLocation = lectureLocation;
 		this.lectureDate = lectureDate;
@@ -129,6 +140,35 @@ public class LectureEntity {
 
 	public LectureStatus getStatus() {
 		return status;
+	}
+
+	// 승인 컬럼이 생기기 전에 저장된 강의는 이미 공개되어 있었으므로 APPROVED로 간주한다.
+	public ApprovalStatus getApprovalStatus() {
+		return approvalStatus == null ? ApprovalStatus.APPROVED : approvalStatus;
+	}
+
+	public boolean isApproved() {
+		return getApprovalStatus() == ApprovalStatus.APPROVED;
+	}
+
+	public String getRejectionReason() {
+		return rejectionReason;
+	}
+
+	public LocalDateTime getReviewedAt() {
+		return reviewedAt;
+	}
+
+	public void approve() {
+		this.approvalStatus = ApprovalStatus.APPROVED;
+		this.rejectionReason = null;
+		this.reviewedAt = LocalDateTime.now();
+	}
+
+	public void reject(String rejectionReason) {
+		this.approvalStatus = ApprovalStatus.REJECTED;
+		this.rejectionReason = rejectionReason;
+		this.reviewedAt = LocalDateTime.now();
 	}
 
 	public String getLectureLocation() {
