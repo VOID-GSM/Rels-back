@@ -68,12 +68,18 @@ public class LectureService {
 		return toLectureDetail(lecture, userId);
 	}
 
+	/**
+	 * 승인된 강연과 함께, 조회한 본인이 개설한 강연은 승인 대기/거절 상태여도 반환한다.
+	 * viewerId가 null이면(디스코드 등 비로그인 조회) 승인된 강연만 반환한다.
+	 */
 	@Transactional(readOnly = true)
-	public Page<LectureSummaryResponse> getLectures(Pageable pageable) {
-		Page<LectureEntity> lectures = lectureRepository.findAllByApprovalStatusOrderByCreatedAtDesc(ApprovalStatus.APPROVED, pageable);
+	public Page<LectureSummaryResponse> getLectures(Pageable pageable, Long viewerId) {
+		Page<LectureEntity> lectures = viewerId == null
+				? lectureRepository.findAllByApprovalStatusOrderByCreatedAtDesc(ApprovalStatus.APPROVED, pageable)
+				: lectureRepository.findAllByApprovalStatusOrCreatorIdOrderByCreatedAtDesc(ApprovalStatus.APPROVED, viewerId, pageable);
 		Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId = getEnrollmentCountsByLectureIds(lectures.getContent());
 
-		return lectures.map(lecture -> toLectureSummary(lecture, enrollmentCountsByLectureId));
+		return lectures.map(lecture -> toLectureSummary(lecture, enrollmentCountsByLectureId, viewerId));
 	}
 
 	@Transactional(readOnly = true)
@@ -82,7 +88,7 @@ public class LectureService {
 		Page<LectureEntity> lectures = lectureRepository.findAllByApprovalStatusOrderByCreatedAtDesc(ApprovalStatus.PENDING, pageable);
 		Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId = getEnrollmentCountsByLectureIds(lectures.getContent());
 
-		return lectures.map(lecture -> toLectureSummary(lecture, enrollmentCountsByLectureId));
+		return lectures.map(lecture -> toLectureSummary(lecture, enrollmentCountsByLectureId, null));
 	}
 
 	@Transactional
@@ -267,7 +273,8 @@ public class LectureService {
 	}
 
 	private LectureSummaryResponse toLectureSummary(LectureEntity lecture,
-													Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId) {
+													Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId,
+													Long viewerId) {
 		if (lecture.getCreator() == null) {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
 		}
@@ -283,6 +290,8 @@ public class LectureService {
 				lecture.getCreator().getName(),
 				lecture.getCreator().getStudentNumber(),
 				lecture.getStatus().name(),
+				lecture.getApprovalStatus().name(),
+				resolveRejectionReason(lecture, viewerId),
 				enrolledCount,
 				waitingCount,
 				lecture.getLectureLocation(),
@@ -338,6 +347,8 @@ public class LectureService {
 				lecture.getCreator().getName(),
 				lecture.getCreator().getStudentNumber(),
 				lecture.getStatus().name(),
+				lecture.getApprovalStatus().name(),
+				resolveRejectionReason(lecture, userId),
 				enrolledCount,
 				waitingCount,
 				myEnrollmentStatus,
@@ -349,6 +360,16 @@ public class LectureService {
 				lecture.getCapacityByGrade(),
 				lecture.getTotalCapacity()
 		);
+	}
+
+	/** 거절 사유는 개설자 본인에게만 내려준다. */
+	private String resolveRejectionReason(LectureEntity lecture, Long viewerId) {
+		if (lecture.getApprovalStatus() != ApprovalStatus.REJECTED) {
+			return null;
+		}
+		boolean isCreator = viewerId != null && lecture.getCreator() != null
+				&& lecture.getCreator().getId().equals(viewerId);
+		return isCreator ? lecture.getRejectionReason() : null;
 	}
 
 	private UserEntity requireUser(Long userId) {
@@ -503,6 +524,8 @@ public class LectureService {
 						lecture.getId(),
 						lecture.getTitle(),
 						lecture.getStatus().name(),
+						lecture.getApprovalStatus().name(),
+						lecture.getRejectionReason(),
 						lecture.getLectureLocation(),
 						lecture.getLectureDate(),
 						lecture.getLectureTime(),

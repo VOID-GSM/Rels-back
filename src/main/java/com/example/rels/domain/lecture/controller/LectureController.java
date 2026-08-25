@@ -43,8 +43,10 @@ public class LectureController {
 
 	@GetMapping
 	public Page<LectureSummaryResponse> getLectures(
+			@AuthenticationPrincipal AuthenticatedUser currentUser,
 			@PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-		return lectureService.getLectures(pageable);
+		AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		return lectureService.getLectures(pageable, authenticatedUser.userId());
 	}
 
 	@GetMapping("/pending")
@@ -68,7 +70,7 @@ public class LectureController {
 	@GetMapping("/discord")
 	public Page<LectureSummaryResponse> getLecturesForDiscord(
 			@PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-		return lectureService.getLectures(pageable);
+		return lectureService.getLectures(pageable, null);
 	}
 
 	@GetMapping("/{lectureId}")
