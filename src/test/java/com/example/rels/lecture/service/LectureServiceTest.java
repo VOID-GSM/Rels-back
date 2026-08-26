@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -84,6 +85,8 @@ class LectureServiceTest {
 		LectureEntity secondLecture = new LectureEntity("title2", "description2", creator, "장소2", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(firstLecture, 11L);
 		setId(secondLecture, 12L);
+		setCreatedAt(firstLecture, LocalDateTime.now());
+		setCreatedAt(secondLecture, LocalDateTime.now());
 		setApprovalStatus(firstLecture, ApprovalStatus.APPROVED);
 		setApprovalStatus(secondLecture, ApprovalStatus.APPROVED);
 
@@ -122,6 +125,7 @@ class LectureServiceTest {
 
 		LectureEntity endedLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().minusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(endedLecture, 11L);
+		setCreatedAt(endedLecture, LocalDateTime.now().minusDays(2));
 		setApprovalStatus(endedLecture, ApprovalStatus.APPROVED);
 
 		LectureEnrollmentCountProjection enrolledCount = org.mockito.Mockito.mock(LectureEnrollmentCountProjection.class);
@@ -151,6 +155,7 @@ class LectureServiceTest {
 
 		LectureEntity endedLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().minusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(endedLecture, 11L);
+		setCreatedAt(endedLecture, LocalDateTime.now().minusDays(2));
 		setApprovalStatus(endedLecture, ApprovalStatus.APPROVED);
 
 		when(lectureRepository.findById(11L)).thenReturn(Optional.of(endedLecture));
@@ -168,6 +173,7 @@ class LectureServiceTest {
 	void enrollRejectsEndedLecture() {
 		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", LocalDate.now().minusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(lecture, 1L);
+		setCreatedAt(lecture, LocalDateTime.now().minusDays(2));
 		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
 
 		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
@@ -179,8 +185,25 @@ class LectureServiceTest {
 	}
 
 	@Test
+	@DisplayName("게시 당일 16:30 이전 수강 신청 시 예외가 발생한다")
+	void enrollRejectsBeforeOpenTime() {
+		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 30);
+		setId(lecture, 1L);
+		setCreatedAt(lecture, LocalDateTime.now().plusHours(1));
+		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
+
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+
+		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> lectureService.enroll(1L, 2L));
+
+		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+		assertEquals("수강 신청은 게시 당일 오후 4시 30분부터 가능합니다.", exception.getReason());
+	}
+
+	@Test
 	void enrollConfirmsLectureAtThreshold() {
 		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now().plusDays(1), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), 30);
+		setCreatedAt(lecture, LocalDateTime.now().minusDays(1)); // 이미 신청 시간이 오픈된 강연
 		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
@@ -208,6 +231,7 @@ class LectureServiceTest {
 	@Test
 	void enrollConfirmsLectureAboveThreshold() {
 		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now().plusDays(1), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), 30);
+		setCreatedAt(lecture, LocalDateTime.now().minusDays(1)); // 이미 신청 시간이 오픈된 강연
 		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
@@ -251,6 +275,7 @@ class LectureServiceTest {
 	@Test
 	void enrollMovesToWaitingAfterCapacity() {
 		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now().plusDays(1), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), 30);
+		setCreatedAt(lecture, LocalDateTime.now().minusDays(1)); // 이미 신청 시간이 오픈된 강연
 		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
@@ -277,6 +302,7 @@ class LectureServiceTest {
 	void cancelPromotesFirstWaitingUser() {
 		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now(), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(lecture, 1L);
+		setCreatedAt(lecture, LocalDateTime.now().minusDays(1));
 		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 		UserEntity waitingUser = new UserEntity("wait@test.com", "wait", "1000000002", Role.USER);
@@ -308,6 +334,24 @@ class LectureServiceTest {
 			field.set(lecture, id);
 		} catch (ReflectiveOperationException e) {
 			throw new IllegalStateException("id 설정 실패", e);
+		}
+	}
+
+	private void setCreatedAt(LectureEntity lecture, LocalDateTime createdAt) {
+		try {
+			Field field = LectureEntity.class.getSuperclass().getDeclaredField("createdAt");
+			field.setAccessible(true);
+			field.set(lecture, createdAt);
+		} catch (NoSuchFieldException e) {
+			try {
+				Field field = LectureEntity.class.getDeclaredField("createdAt");
+				field.setAccessible(true);
+				field.set(lecture, createdAt);
+			} catch (ReflectiveOperationException ex) {
+				throw new IllegalStateException("createdAt 설정 실패", ex);
+			}
+		} catch (ReflectiveOperationException e) {
+			throw new IllegalStateException("createdAt 설정 실패", e);
 		}
 	}
 
@@ -444,6 +488,11 @@ class LectureServiceTest {
 		LectureEntity lecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20);
 		setId(lecture, 1L);
 
+		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 1L)).thenReturn(Optional.empty());
+
 		LectureUpdateRequest request = new LectureUpdateRequest(
 				"updated title",
 				"updated description",
@@ -454,11 +503,6 @@ class LectureServiceTest {
 				LocalTime.NOON,
 				LocalDateTime.now().plusDays(2)
 		);
-
-		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
-		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
-		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
-		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 1L)).thenReturn(Optional.empty());
 
 		LectureDetailResponse response = lectureService.updateLecture(1L, 1L, Role.USER, request);
 
@@ -489,6 +533,7 @@ class LectureServiceTest {
 
 		LectureEntity pendingLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(pendingLecture, 11L);
+		setCreatedAt(pendingLecture, LocalDateTime.now());
 
 		Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
 		when(lectureRepository.findAllByApprovalStatusOrCreatorIdOrderByCreatedAtDesc(eq(ApprovalStatus.APPROVED), eq(1L), any()))
@@ -507,6 +552,7 @@ class LectureServiceTest {
 
 		LectureEntity rejectedLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(rejectedLecture, 11L);
+		setCreatedAt(rejectedLecture, LocalDateTime.now());
 		rejectedLecture.updateApprovalStatus(ApprovalStatus.REJECTED, "같은 시간대에 다른 강연이 있습니다.");
 
 		Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
@@ -527,6 +573,7 @@ class LectureServiceTest {
 
 		LectureEntity rejectedLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(rejectedLecture, 11L);
+		setCreatedAt(rejectedLecture, LocalDateTime.now());
 		rejectedLecture.updateApprovalStatus(ApprovalStatus.REJECTED, "같은 시간대에 다른 강연이 있습니다.");
 
 		when(lectureRepository.findById(11L)).thenReturn(Optional.of(rejectedLecture));
@@ -563,6 +610,7 @@ class LectureServiceTest {
 
 		LectureEntity pendingLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(pendingLecture, 11L);
+		setCreatedAt(pendingLecture, LocalDateTime.now());
 
 		when(lectureRepository.findById(11L)).thenReturn(Optional.of(pendingLecture));
 		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
@@ -597,6 +645,7 @@ class LectureServiceTest {
 
 		LectureEntity rejectedLecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null);
 		setId(rejectedLecture, 11L);
+		setCreatedAt(rejectedLecture, LocalDateTime.now());
 		rejectedLecture.updateApprovalStatus(ApprovalStatus.REJECTED, "정원이 너무 적습니다.");
 
 		when(userRepository.findById(1L)).thenReturn(Optional.of(creator));
