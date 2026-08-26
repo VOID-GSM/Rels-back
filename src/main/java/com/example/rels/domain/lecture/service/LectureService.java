@@ -68,10 +68,6 @@ public class LectureService {
 		return toLectureDetail(lecture, userId);
 	}
 
-	/**
-	 * 승인된 강연과 함께, 조회한 본인이 개설한 강연은 승인 대기/거절 상태여도 반환한다.
-	 * viewerId가 null이면(디스코드 등 비로그인 조회) 승인된 강연만 반환한다.
-	 */
 	@Transactional(readOnly = true)
 	public Page<LectureSummaryResponse> getLectures(Pageable pageable, Long viewerId) {
 		Page<LectureEntity> lectures = viewerId == null
@@ -148,11 +144,18 @@ public class LectureService {
 		if (lecture.getApprovalStatus() != ApprovalStatus.APPROVED) {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "승인된 강연만 수강 신청할 수 있습니다.");
 		}
-		refreshLectureLifecycle(lecture, LocalDateTime.now());
+
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime openTime = lecture.getCreatedAt().toLocalDate().atTime(16, 30);
+		if (now.isBefore(openTime)) {
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "수강 신청은 게시 당일 오후 4시 30분부터 가능합니다.");
+		}
+
+		refreshLectureLifecycle(lecture, now);
 		if (lecture.getStatus() == LectureStatus.CLOSE) {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "이미 종료된 강의입니다.");
 		}
-		if (LocalDateTime.now().isAfter(lecture.getApplicationDeadline())) {
+		if (now.isAfter(lecture.getApplicationDeadline())) {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "신청 마감일이 지났습니다.");
 		}
 		UserEntity user = requireUser(userId);
@@ -364,7 +367,6 @@ public class LectureService {
 		);
 	}
 
-	/** 승인되지 않은 강연은 개설자 본인과 학생회에게만 보인다. */
 	private void validateApprovalVisibility(LectureEntity lecture, Long viewerId, Role viewerRole) {
 		if (lecture.getApprovalStatus() == ApprovalStatus.APPROVED) {
 			return;
@@ -383,7 +385,6 @@ public class LectureService {
 				&& lecture.getCreator().getId().equals(viewerId);
 	}
 
-	/** 거절 사유는 개설자 본인에게만 내려준다. */
 	private String resolveRejectionReason(LectureEntity lecture, Long viewerId) {
 		if (lecture.getApprovalStatus() != ApprovalStatus.REJECTED) {
 			return null;
