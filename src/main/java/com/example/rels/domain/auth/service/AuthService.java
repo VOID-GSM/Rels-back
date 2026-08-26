@@ -186,12 +186,14 @@ public class AuthService {
 	}
 
 	private UserEntity findOrCreateUser(String email, String name, String studentNumber, team.themoment.datagsm.sdk.oauth.model.StudentRole studentRole) {
-		Role role = studentRole == team.themoment.datagsm.sdk.oauth.model.StudentRole.STUDENT_COUNCIL ? Role.ADMIN : Role.USER;
 		return userRepository.findByEmail(email)
 				.map(existing -> {
-					existing.updateProfile(name, studentNumber, role);
+					existing.updateProfile(name, studentNumber, existing.getRole());
 					return existing;
 				})
-				.orElseGet(() -> userRepository.save(new UserEntity(email, name, studentNumber, role)));
+				.orElseGet(() -> {
+					Role initialRole = studentRole == team.themoment.datagsm.sdk.oauth.model.StudentRole.STUDENT_COUNCIL ? Role.ADMIN : Role.USER;
+					return userRepository.save(new UserEntity(email, name, studentNumber, initialRole));
+				});
 	}
 }
