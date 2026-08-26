@@ -146,9 +146,9 @@ public class LectureService {
 		}
 
 		LocalDateTime now = LocalDateTime.now();
-		LocalDateTime openTime = lecture.getCreatedAt().toLocalDate().atTime(16, 30);
+		LocalDateTime openTime = lecture.getCreatedAt().toLocalDate().atTime(16, 20);
 		if (now.isBefore(openTime)) {
-			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "수강 신청은 게시 당일 오후 4시 30분부터 가능합니다.");
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "수강 신청은 게시 당일 오후 4시 20분부터 가능합니다.");
 		}
 
 		refreshLectureLifecycle(lecture, now);
