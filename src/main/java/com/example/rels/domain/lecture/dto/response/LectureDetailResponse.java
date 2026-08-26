@@ -1,4 +1,5 @@
-package com.example.rels.domain.lecture.dto;
+package com.example.rels.domain.lecture.dto.response;
+
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -6,7 +7,8 @@ import java.time.LocalTime;
 import java.util.Map;
 
 
-public record LectureSummaryResponse(
+
+public record LectureDetailResponse(
 		Long lectureId,
 		String title,
 		String description,
@@ -14,8 +16,11 @@ public record LectureSummaryResponse(
 		String creatorName,
 		String creatorStudentNumber,
 		String lectureStatus,
+		String approvalStatus,
+		String rejectionReason,
 		long enrolledCount,
 		long waitingCount,
+		String myEnrollmentStatus,
 		String lectureLocation,
 		LocalDate lectureDate,
 		LocalTime lectureTime,
@@ -25,3 +30,4 @@ public record LectureSummaryResponse(
 		Integer totalCapacity
 ) {
 }
+

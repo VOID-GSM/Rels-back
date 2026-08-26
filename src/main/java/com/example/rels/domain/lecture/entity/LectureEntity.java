@@ -77,6 +77,13 @@ public class LectureEntity {
 	@Column(name = "updated_at", nullable = false)
 	private LocalDateTime updatedAt;
 
+	@Enumerated(EnumType.STRING)
+	@Column(name = "approval_status", nullable = false)
+	private ApprovalStatus approvalStatus = ApprovalStatus.PENDING;
+
+	@Column(name = "rejection_reason")
+	private String rejectionReason;
+
 	protected LectureEntity() {
 	}
 
@@ -188,5 +195,18 @@ public class LectureEntity {
 
 	public void setStatus(LectureStatus status) {
 		this.status = status;
+	}
+
+	public ApprovalStatus getApprovalStatus() {
+		return approvalStatus;
+	}
+
+	public String getRejectionReason() {
+		return rejectionReason;
+	}
+
+	public void updateApprovalStatus(ApprovalStatus approvalStatus, String rejectionReason) {
+		this.approvalStatus = approvalStatus;
+		this.rejectionReason = rejectionReason;
 	}
 }

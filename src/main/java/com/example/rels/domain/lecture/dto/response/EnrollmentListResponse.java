@@ -1,4 +1,4 @@
-package com.example.rels.domain.lecture.dto;
+package com.example.rels.domain.lecture.dto.response;
 
 import java.util.List;
 

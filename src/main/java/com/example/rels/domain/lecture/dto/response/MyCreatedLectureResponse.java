@@ -1,4 +1,4 @@
-package com.example.rels.domain.lecture.dto;
+package com.example.rels.domain.lecture.dto.response;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -8,6 +8,8 @@ public record MyCreatedLectureResponse(
 		Long lectureId,
 		String title,
 		String lectureStatus,
+		String approvalStatus,
+		String rejectionReason,
 		String lectureLocation,
 		LocalDate lectureDate,
 		LocalTime lectureTime,
