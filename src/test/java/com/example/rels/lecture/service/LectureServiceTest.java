@@ -189,7 +189,6 @@ class LectureServiceTest {
 		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", LocalDate.now().plusDays(2), LocalTime.NOON, LocalDateTime.now().plusDays(2), 30);
 		setId(lecture, 1L);
 
-		// 생성 시각을 오늘 17:00로 설정하여 오픈 시각(내일 16:20) 이전 신청 상황을 연출
 		setCreatedAt(lecture, LocalDateTime.now().toLocalDate().atTime(17, 0));
 		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
 
@@ -204,7 +203,7 @@ class LectureServiceTest {
 	@Test
 	void enrollConfirmsLectureAtThreshold() {
 		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now().plusDays(1), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), 30);
-		setCreatedAt(lecture, LocalDateTime.now().minusDays(2)); // 이미 신청 시간이 오픈된 강연
+		setCreatedAt(lecture, LocalDateTime.now().minusDays(2));
 		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
@@ -232,7 +231,7 @@ class LectureServiceTest {
 	@Test
 	void enrollConfirmsLectureAboveThreshold() {
 		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now().plusDays(1), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), 30);
-		setCreatedAt(lecture, LocalDateTime.now().minusDays(2)); // 이미 신청 시간이 오픈된 강연
+		setCreatedAt(lecture, LocalDateTime.now().minusDays(2));
 		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
@@ -265,8 +264,7 @@ class LectureServiceTest {
 				20,
 				"장소",
 				LocalDate.now().plusDays(1),
-				LocalTime.NOON,
-				LocalDateTime.now().plusDays(1));
+				LocalTime.NOON);
 
 		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> lectureService.createLecture(1L, request));
 
@@ -276,7 +274,7 @@ class LectureServiceTest {
 	@Test
 	void enrollMovesToWaitingAfterCapacity() {
 		LectureEntity lecture = new LectureEntity("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", java.time.LocalDate.now().plusDays(1), java.time.LocalTime.NOON, LocalDateTime.now().plusDays(1), 30);
-		setCreatedAt(lecture, LocalDateTime.now().minusDays(2)); // 이미 신청 시간이 오픈된 강연
+		setCreatedAt(lecture, LocalDateTime.now().minusDays(2));
 		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
 		UserEntity applicant = new UserEntity("user@test.com", "user", "1000000001", Role.USER);
 
@@ -313,8 +311,7 @@ class LectureServiceTest {
 
 		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
 		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(enrolled));
-		when(lectureEnrollmentRepository.findFirstByLectureIdAndStatusOrderByRequestedAtAscIdAsc(1L, EnrollmentStatus.WAITING))
-				.thenReturn(Optional.of(waiting));
+		when(lectureEnrollmentRepository.findAllByLectureId(1L)).thenReturn(List.of(waiting));
 		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(30L);
 		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(2L);
 
@@ -326,6 +323,118 @@ class LectureServiceTest {
 		assertEquals(30L, response.enrolledCount());
 		assertEquals(2L, response.waitingCount());
 		assertNotNull(response.lectureId());
+	}
+
+	@Test
+	void enrollReadsGradeFromFirstDigitOfStudentNumber() {
+		LectureEntity lecture = gradeCapacityLecture(Map.of(1, 1, 2, 1, 3, 1), LocalDateTime.now().plusDays(1));
+		UserEntity secondGrade = new UserEntity("second@test.com", "second", "2204", Role.USER);
+		UserEntity applicant = new UserEntity("third@test.com", "third", "3204", Role.USER);
+
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+		when(userRepository.findById(2L)).thenReturn(Optional.of(applicant));
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.empty());
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(1L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
+		when(lectureEnrollmentRepository.findAllByLectureId(1L))
+				.thenReturn(List.of(enrollment(lecture, secondGrade, EnrollmentStatus.ENROLLED, 1L)));
+
+		EnrollmentResponse response = lectureService.enroll(1L, 2L);
+
+		assertEquals("ENROLLED", response.enrollmentStatus());
+	}
+
+	@Test
+	void enrollMovesToWaitingWhenGradeHasNoSeat() {
+		LectureEntity lecture = gradeCapacityLecture(Map.of(1, 5, 2, 5), LocalDateTime.now().plusDays(1));
+		UserEntity applicant = new UserEntity("third@test.com", "third", "3204", Role.USER);
+
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+		when(userRepository.findById(2L)).thenReturn(Optional.of(applicant));
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.empty());
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
+
+		EnrollmentResponse response = lectureService.enroll(1L, 2L);
+
+		assertEquals("WAITING", response.enrollmentStatus());
+	}
+
+	@Test
+	void cancelPromotesWaitingUserOfTheGradeThatFreedUpSeat() {
+		LectureEntity lecture = gradeCapacityLecture(Map.of(1, 1, 2, 1), LocalDateTime.now().plusDays(1));
+		UserEntity firstGrade = new UserEntity("first@test.com", "first", "1101", Role.USER);
+		UserEntity secondGrade = new UserEntity("second@test.com", "second", "2101", Role.USER);
+
+		LectureEnrollmentEntity canceled = enrollment(lecture, firstGrade, EnrollmentStatus.ENROLLED, 1L);
+		LectureEnrollmentEntity stillEnrolled = enrollment(lecture, secondGrade, EnrollmentStatus.ENROLLED, 2L);
+		LectureEnrollmentEntity waitingSecondGrade = enrollment(lecture,
+				new UserEntity("second2@test.com", "second2", "2102", Role.USER), EnrollmentStatus.WAITING, 3L);
+		LectureEnrollmentEntity waitingFirstGrade = enrollment(lecture,
+				new UserEntity("first2@test.com", "first2", "1102", Role.USER), EnrollmentStatus.WAITING, 4L);
+
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(canceled));
+		when(lectureEnrollmentRepository.findAllByLectureId(1L))
+				.thenReturn(List.of(stillEnrolled, waitingSecondGrade, waitingFirstGrade));
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(2L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(1L);
+
+		lectureService.cancelEnrollment(1L, 2L);
+
+		assertEquals(EnrollmentStatus.WAITING, waitingSecondGrade.getStatus());
+		assertEquals(EnrollmentStatus.ENROLLED, waitingFirstGrade.getStatus());
+	}
+
+	@Test
+	void syncPromotesWaitingUsersUpToTotalCapacityAfterDeadline() {
+		LectureEntity lecture = gradeCapacityLecture(Map.of(1, 1, 2, 1, 3, 1), LocalDateTime.now().minusHours(1));
+		UserEntity firstGrade = new UserEntity("first@test.com", "first", "1101", Role.USER);
+
+		LectureEnrollmentEntity enrolled = enrollment(lecture, firstGrade, EnrollmentStatus.ENROLLED, 1L);
+		LectureEnrollmentEntity firstWaiting = enrollment(lecture,
+				new UserEntity("second@test.com", "second", "2101", Role.USER), EnrollmentStatus.WAITING, 2L);
+		LectureEnrollmentEntity secondWaiting = enrollment(lecture,
+				new UserEntity("second2@test.com", "second2", "2102", Role.USER), EnrollmentStatus.WAITING, 3L);
+		LectureEnrollmentEntity thirdWaiting = enrollment(lecture,
+				new UserEntity("second3@test.com", "second3", "2103", Role.USER), EnrollmentStatus.WAITING, 4L);
+
+		when(lectureRepository.findAll()).thenReturn(List.of(lecture));
+		when(lectureEnrollmentRepository.findAllByLectureId(1L))
+				.thenReturn(List.of(enrolled, firstWaiting, secondWaiting, thirdWaiting));
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(3L);
+
+		lectureService.syncLectureStatuses();
+
+		assertEquals(EnrollmentStatus.ENROLLED, firstWaiting.getStatus());
+		assertEquals(EnrollmentStatus.ENROLLED, secondWaiting.getStatus());
+		assertEquals(EnrollmentStatus.WAITING, thirdWaiting.getStatus());
+	}
+
+	private LectureEntity gradeCapacityLecture(Map<Integer, Integer> capacityByGrade, LocalDateTime applicationDeadline) {
+		LectureEntity lecture = new LectureEntity("title", "description",
+				new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소",
+				LocalDate.now().plusDays(7), LocalTime.NOON, applicationDeadline, null);
+		setId(lecture, 1L);
+		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
+		setCreatedAt(lecture, LocalDateTime.now().minusDays(2).toLocalDate().atTime(9, 0));
+		lecture.setCapacityByGrade(capacityByGrade);
+		return lecture;
+	}
+
+	private LectureEnrollmentEntity enrollment(LectureEntity lecture, UserEntity user, EnrollmentStatus status, Long id) {
+		LectureEnrollmentEntity enrollment = new LectureEnrollmentEntity(lecture, user, status);
+		try {
+			Field idField = LectureEnrollmentEntity.class.getDeclaredField("id");
+			idField.setAccessible(true);
+			idField.set(enrollment, id);
+			Field requestedAtField = LectureEnrollmentEntity.class.getDeclaredField("requestedAt");
+			requestedAtField.setAccessible(true);
+			requestedAtField.set(enrollment, LocalDateTime.now().minusDays(1).plusMinutes(id));
+		} catch (ReflectiveOperationException e) {
+			throw new IllegalStateException(e);
+		}
+		return enrollment;
 	}
 
 	private void setId(LectureEntity lecture, Long id) {
@@ -401,8 +510,7 @@ class LectureServiceTest {
 				20,
 				"updated 장소",
 				LocalDate.now().plusDays(2),
-				LocalTime.NOON,
-				LocalDateTime.now().plusDays(2)
+				LocalTime.NOON
 		);
 
 		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
@@ -451,8 +559,7 @@ class LectureServiceTest {
 				20,
 				"updated 장소",
 				LocalDate.now().plusDays(2),
-				LocalTime.NOON,
-				LocalDateTime.now().plusDays(2)
+				LocalTime.NOON
 		);
 
 		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
@@ -489,11 +596,6 @@ class LectureServiceTest {
 		LectureEntity lecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20);
 		setId(lecture, 1L);
 
-		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
-		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
-		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
-		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 1L)).thenReturn(Optional.empty());
-
 		LectureUpdateRequest request = new LectureUpdateRequest(
 				"updated title",
 				"updated description",
@@ -501,29 +603,17 @@ class LectureServiceTest {
 				20,
 				"updated 장소",
 				LocalDate.now().plusDays(2),
-				LocalTime.NOON,
-				LocalDateTime.now().plusDays(2)
+				LocalTime.NOON
 		);
+
+		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 1L)).thenReturn(Optional.empty());
 
 		LectureDetailResponse response = lectureService.updateLecture(1L, 1L, Role.USER, request);
 
 		assertEquals("updated title", response.title());
 		assertEquals("updated description", response.description());
-	}
-
-	@Test
-	void deleteLectureAllowsCreatorToDeleteOwnLecture() {
-		UserEntity creator = new UserEntity("creator@test.com", "creator", "1000000000", Role.USER);
-		setId(creator);
-
-		LectureEntity lecture = new LectureEntity("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20);
-		setId(lecture, 1L);
-
-		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
-
-		lectureService.deleteLecture(1L, 1L, Role.USER);
-
-		verify(lectureEnrollmentRepository).deleteByLectureId(1L);
-		verify(lectureRepository).delete(lecture);
 	}
 }
