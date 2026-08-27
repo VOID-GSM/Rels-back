@@ -1,8 +1,10 @@
 package com.example.rels.domain.lecture.service;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.example.rels.domain.lecture.dto.request.AttendanceUpdateRequest;
@@ -209,10 +211,11 @@ public class LectureService {
 		return new EnrollmentResponse(lectureId, status.name(), nextEnrolledCount, nextWaitingCount, savedEnrollment.getRequestedAt());
 	}
 
+	/** 학번 "2204"의 맨 앞자리가 학년이다. 두 번째 자리는 반이므로 읽으면 안 된다. */
 	private Integer extractGradeFromStudentNumber(String studentNumber) {
 		if (studentNumber == null || studentNumber.isEmpty()) return null;
 		try {
-			return Integer.parseInt(studentNumber.substring(1, 2));
+			return Integer.parseInt(studentNumber.substring(0, 1));
 		} catch (Exception e) {
 			return null;
 		}
@@ -449,8 +452,70 @@ public class LectureService {
 	private void syncLectureStatuses(LocalDateTime now) {
 		List<LectureEntity> lectures = lectureRepository.findAll();
 		for (LectureEntity lecture : lectures) {
+			promoteWaitingAfterDeadline(lecture, now);
 			refreshLectureLifecycle(lecture, now);
 		}
+	}
+
+	/**
+	 * 신청 마감이 지나면 비어 있는 자리를 대기자로 채운다.
+	 * 학년별 정원은 신청을 받는 동안만 적용하고, 마감 뒤에는 전체 정원까지 신청 순서대로 올린다.
+	 */
+	private void promoteWaitingAfterDeadline(LectureEntity lecture, LocalDateTime now) {
+		if (lecture.getId() == null || lecture.getStatus() == LectureStatus.CLOSE) {
+			return;
+		}
+
+		LocalDateTime applicationDeadline = lecture.getApplicationDeadline();
+		if (applicationDeadline == null || !now.isAfter(applicationDeadline)) {
+			return;
+		}
+
+		int capacity = resolveTotalCapacity(lecture);
+		if (capacity <= 0) {
+			return;
+		}
+
+		List<LectureEnrollmentEntity> enrollments = lectureEnrollmentRepository.findAllByLectureId(lecture.getId());
+		long enrolledCount = enrollments.stream()
+				.filter(e -> e.getStatus() == EnrollmentStatus.ENROLLED)
+				.count();
+		if (enrolledCount >= capacity) {
+			return;
+		}
+
+		List<LectureEnrollmentEntity> waiting = enrollments.stream()
+				.filter(e -> e.getStatus() == EnrollmentStatus.WAITING)
+				.sorted(Comparator
+						.comparing(LectureEnrollmentEntity::getRequestedAt,
+								Comparator.nullsLast(Comparator.naturalOrder()))
+						.thenComparing(LectureEnrollmentEntity::getId))
+				.toList();
+
+		for (LectureEnrollmentEntity enrollment : waiting) {
+			if (enrolledCount >= capacity) {
+				break;
+			}
+			enrollment.promoteToEnrolled();
+			enrolledCount++;
+		}
+	}
+
+	/** 전체 정원. 학년별로 나눈 강연은 학년 정원의 합이 전체 정원이 된다. */
+	private int resolveTotalCapacity(LectureEntity lecture) {
+		if (lecture.getTotalCapacity() != null) {
+			return lecture.getTotalCapacity();
+		}
+
+		Map<Integer, Integer> capacityByGrade = lecture.getCapacityByGrade();
+		if (capacityByGrade == null || capacityByGrade.isEmpty()) {
+			return 0;
+		}
+
+		return capacityByGrade.values().stream()
+				.filter(Objects::nonNull)
+				.mapToInt(Integer::intValue)
+				.sum();
 	}
 
 	private void refreshLectureLifecycle(LectureEntity lecture, LocalDateTime now) {
