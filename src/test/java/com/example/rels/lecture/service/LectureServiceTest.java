@@ -474,6 +474,17 @@ class LectureServiceTest {
 		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
 	}
 
+	@Test
+	void cancelRejectsAfterApplicationDeadline() {
+		LectureEntity lecture = gradeCapacityLecture(Map.of(1, 5, 2, 5), LocalDateTime.now().minusHours(1));
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+
+		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class,
+				() -> lectureService.cancelEnrollment(1L, 2L));
+
+		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+	}
+
 	/** 학년별 정원으로 만든 강연. 강연 자체는 아직 끝나지 않은 시각으로 둔다. */
 	private LectureEntity gradeCapacityLecture(Map<Integer, Integer> capacityByGrade, LocalDateTime applicationDeadline) {
 		LectureEntity lecture = new LectureEntity("title", "description",
