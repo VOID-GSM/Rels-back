@@ -1,6 +1,9 @@
 package com.example.rels.domain.lecture.service;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +37,15 @@ import com.example.rels.domain.lecture.repository.LectureRepository;
 
 @Service
 public class LectureService {
+
+	/**
+	 * 서버는 UTC로 돌지만 마감·강연 시각은 사용자가 한국 시간으로 입력한 값이 그대로 저장된다.
+	 * 시각을 비교할 때는 UTC now가 아니라 한국 시간 벽시계를 기준으로 삼아야 9시간이 밀리지 않는다.
+	 */
+	private static final ZoneId SCHOOL_ZONE = ZoneId.of("Asia/Seoul");
+
+	/** 7교시가 끝나는 시각. 수강 신청은 이 시각부터 받는다. */
+	private static final LocalTime ENROLLMENT_OPEN_TIME = LocalTime.of(16, 20);
 
 	private static final long CONFIRM_THRESHOLD = 10;
 	private static final int MIN_CAPACITY = 10;
@@ -147,16 +159,10 @@ public class LectureService {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "승인된 강연만 수강 신청할 수 있습니다.");
 		}
 
-		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime now = schoolTimeNow();
 
-		LocalDateTime createdAt = lecture.getCreatedAt();
-		LocalDateTime openTime = createdAt.toLocalDate().atTime(16, 20);
-
-		if (!createdAt.isBefore(openTime)) {
-			openTime = openTime.plusDays(1);
-		}
-
-		if (now.isBefore(openTime)) {
+		LocalDateTime openTime = enrollmentOpenAt(lecture.getCreatedAt());
+		if (openTime != null && now.isBefore(openTime)) {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "수강 신청은 " + openTime.toLocalDate() + " 오후 4시 20분부터 가능합니다.");
 		}
 
@@ -212,6 +218,31 @@ public class LectureService {
 		return new EnrollmentResponse(lectureId, status.name(), nextEnrolledCount, nextWaitingCount, savedEnrollment.getRequestedAt());
 	}
 
+	/** 테스트에서 "지금"을 고정할 수 있도록 열어 둔다. */
+	protected LocalDateTime schoolTimeNow() {
+		return LocalDateTime.now(SCHOOL_ZONE);
+	}
+
+	/** 서버가 UTC로 찍은 시각(createdAt)을 한국 시간 벽시계로 옮긴다. */
+	private LocalDateTime toSchoolTime(LocalDateTime serverTime) {
+		return serverTime.atOffset(ZoneOffset.UTC).atZoneSameInstant(SCHOOL_ZONE).toLocalDateTime();
+	}
+
+	/**
+	 * 신청이 열리는 시각(한국 시간). 개설한 날 16:20이 기본이고,
+	 * 개설 시점이 이미 그 시각을 넘겼으면 다음 날 16:20이다.
+	 */
+	private LocalDateTime enrollmentOpenAt(LocalDateTime createdAt) {
+		if (createdAt == null) {
+			return null;
+		}
+
+		LocalDateTime created = toSchoolTime(createdAt);
+		LocalDateTime openAt = created.toLocalDate().atTime(ENROLLMENT_OPEN_TIME);
+
+		return created.isBefore(openAt) ? openAt : openAt.plusDays(1);
+	}
+
 	/** 학번 "2204"의 맨 앞자리가 학년이다. 두 번째 자리는 반이므로 읽으면 안 된다. */
 	private Integer extractGradeFromStudentNumber(String studentNumber) {
 		if (studentNumber == null || studentNumber.isEmpty()) return null;
@@ -232,7 +263,7 @@ public class LectureService {
 		lectureEnrollmentRepository.delete(enrollment);
 
 		if (canceledStatus == EnrollmentStatus.ENROLLED) {
-			promoteFirstWaitingUser(lecture, LocalDateTime.now());
+			promoteFirstWaitingUser(lecture, schoolTimeNow());
 		}
 
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
@@ -364,7 +395,7 @@ public class LectureService {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
 		}
 		long enrolledCount = getEnrollmentCount(enrollmentCountsByLectureId, lecture.getId(), EnrollmentStatus.ENROLLED);
-		refreshLectureLifecycle(lecture, LocalDateTime.now(), enrolledCount);
+		refreshLectureLifecycle(lecture, schoolTimeNow(), enrolledCount);
 		long waitingCount = getEnrollmentCount(enrollmentCountsByLectureId, lecture.getId(), EnrollmentStatus.WAITING);
 
 		return new LectureSummaryResponse(
@@ -416,7 +447,7 @@ public class LectureService {
 		if (lecture.getCreator() == null) {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
 		}
-		refreshLectureLifecycle(lecture, LocalDateTime.now());
+		refreshLectureLifecycle(lecture, schoolTimeNow());
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.ENROLLED);
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.WAITING);
 
@@ -516,7 +547,7 @@ public class LectureService {
 	@Scheduled(fixedDelayString = "${rels.lecture.lifecycle-sync-delay-ms:60000}")
 	@Transactional
 	public void syncLectureStatuses() {
-		syncLectureStatuses(LocalDateTime.now());
+		syncLectureStatuses(schoolTimeNow());
 	}
 
 	private void syncLectureStatuses(LocalDateTime now) {
