@@ -1,6 +1,10 @@
 package com.example.rels.domain.lecture.service;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -49,10 +53,22 @@ public class LectureService {
 		this.userRepository = userRepository;
 	}
 
+	private LocalDateTime calculateApplicationDeadline(LocalDate lectureDate) {
+		if (lectureDate == null) {
+			return null;
+		}
+		LocalDate mondayOfWeek = lectureDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+		LocalDate previousThursday = mondayOfWeek.minusDays(4);
+		return LocalDateTime.of(previousThursday, LocalTime.of(23, 59, 59));
+	}
+
 	@Transactional
 	public LectureDetailResponse createLecture(Long userId, LectureCreateRequest request) {
 		validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
 		UserEntity creator = requireUser(userId);
+
+		LocalDateTime calculatedDeadline = calculateApplicationDeadline(request.lectureDate());
+
 		LectureEntity lecture = new LectureEntity(
 				request.title(),
 				request.description(),
@@ -60,7 +76,7 @@ public class LectureService {
 				request.lectureLocation(),
 				request.lectureDate(),
 				request.lectureTime(),
-				request.applicationDeadline(),
+				calculatedDeadline,
 				request.totalCapacity()
 		);
 		lecture.setCapacityByGrade(request.capacityByGrade());
@@ -115,6 +131,8 @@ public class LectureService {
 		LectureEntity lecture = requireLecture(lectureId);
 		validateCreator(lecture, userId, userRole);
 
+		LocalDateTime calculatedDeadline = calculateApplicationDeadline(request.lectureDate());
+
 		lecture.updateAllDetails(
 				request.title(),
 				request.description(),
@@ -123,7 +141,7 @@ public class LectureService {
 				request.lectureLocation(),
 				request.lectureDate(),
 				request.lectureTime(),
-				request.applicationDeadline()
+				calculatedDeadline
 		);
 
 		return toLectureDetail(lecture, userId);
