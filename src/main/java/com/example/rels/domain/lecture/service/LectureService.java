@@ -256,6 +256,13 @@ public class LectureService {
 	@Transactional
 	public EnrollmentResponse cancelEnrollment(Long lectureId, Long userId) {
 		LectureEntity lecture = requireLectureForUpdate(lectureId);
+		LocalDateTime now = schoolTimeNow();
+
+		// 마감이 지나면 명단이 확정된다. 이때 빠지면 남은 자리를 다시 채울 방법이 없다.
+		if (isAfterApplicationDeadline(lecture, now)) {
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "신청 마감 후에는 취소할 수 없습니다.");
+		}
+
 		LectureEnrollmentEntity enrollment = lectureEnrollmentRepository.findByLectureIdAndUserId(lectureId, userId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "신청 내역이 없습니다."));
 
@@ -263,7 +270,7 @@ public class LectureService {
 		lectureEnrollmentRepository.delete(enrollment);
 
 		if (canceledStatus == EnrollmentStatus.ENROLLED) {
-			promoteFirstWaitingUser(lecture, schoolTimeNow());
+			promoteFirstWaitingUser(lecture, now);
 		}
 
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
