@@ -313,8 +313,7 @@ class LectureServiceTest {
 
 		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
 		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(enrolled));
-		when(lectureEnrollmentRepository.findFirstByLectureIdAndStatusOrderByRequestedAtAscIdAsc(1L, EnrollmentStatus.WAITING))
-				.thenReturn(Optional.of(waiting));
+		when(lectureEnrollmentRepository.findAllByLectureId(1L)).thenReturn(List.of(waiting));
 		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(30L);
 		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(2L);
 
@@ -326,6 +325,124 @@ class LectureServiceTest {
 		assertEquals(30L, response.enrolledCount());
 		assertEquals(2L, response.waitingCount());
 		assertNotNull(response.lectureId());
+	}
+
+	@Test
+	void enrollReadsGradeFromFirstDigitOfStudentNumber() {
+		// 학번 "3204"는 3학년 2반이다. 두 번째 자리를 읽으면 2학년으로 잘못 판정된다.
+		LectureEntity lecture = gradeCapacityLecture(Map.of(1, 1, 2, 1, 3, 1), LocalDateTime.now().plusDays(1));
+		UserEntity secondGrade = new UserEntity("second@test.com", "second", "2204", Role.USER);
+		UserEntity applicant = new UserEntity("third@test.com", "third", "3204", Role.USER);
+
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+		when(userRepository.findById(2L)).thenReturn(Optional.of(applicant));
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.empty());
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(1L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
+		when(lectureEnrollmentRepository.findAllByLectureId(1L))
+				.thenReturn(List.of(enrollment(lecture, secondGrade, EnrollmentStatus.ENROLLED, 1L)));
+
+		EnrollmentResponse response = lectureService.enroll(1L, 2L);
+
+		assertEquals("ENROLLED", response.enrollmentStatus());
+	}
+
+	@Test
+	void enrollMovesToWaitingWhenGradeHasNoSeat() {
+		LectureEntity lecture = gradeCapacityLecture(Map.of(1, 5, 2, 5), LocalDateTime.now().plusDays(1));
+		UserEntity applicant = new UserEntity("third@test.com", "third", "3204", Role.USER);
+
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+		when(userRepository.findById(2L)).thenReturn(Optional.of(applicant));
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.empty());
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
+
+		EnrollmentResponse response = lectureService.enroll(1L, 2L);
+
+		assertEquals("WAITING", response.enrollmentStatus());
+	}
+
+	@Test
+	void cancelPromotesWaitingUserOfTheGradeThatFreedUpSeat() {
+		LectureEntity lecture = gradeCapacityLecture(Map.of(1, 1, 2, 1), LocalDateTime.now().plusDays(1));
+		UserEntity firstGrade = new UserEntity("first@test.com", "first", "1101", Role.USER);
+		UserEntity secondGrade = new UserEntity("second@test.com", "second", "2101", Role.USER);
+
+		LectureEnrollmentEntity canceled = enrollment(lecture, firstGrade, EnrollmentStatus.ENROLLED, 1L);
+		LectureEnrollmentEntity stillEnrolled = enrollment(lecture, secondGrade, EnrollmentStatus.ENROLLED, 2L);
+		// 2학년이 먼저 대기를 걸었지만 2학년 자리는 그대로 차 있다.
+		LectureEnrollmentEntity waitingSecondGrade = enrollment(lecture,
+				new UserEntity("second2@test.com", "second2", "2102", Role.USER), EnrollmentStatus.WAITING, 3L);
+		LectureEnrollmentEntity waitingFirstGrade = enrollment(lecture,
+				new UserEntity("first2@test.com", "first2", "1102", Role.USER), EnrollmentStatus.WAITING, 4L);
+
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(canceled));
+		when(lectureEnrollmentRepository.findAllByLectureId(1L))
+				.thenReturn(List.of(stillEnrolled, waitingSecondGrade, waitingFirstGrade));
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(2L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(1L);
+
+		lectureService.cancelEnrollment(1L, 2L);
+
+		assertEquals(EnrollmentStatus.WAITING, waitingSecondGrade.getStatus());
+		assertEquals(EnrollmentStatus.ENROLLED, waitingFirstGrade.getStatus());
+	}
+
+	@Test
+	void syncPromotesWaitingUsersUpToTotalCapacityAfterDeadline() {
+		// 학년 정원은 신청받는 동안만 적용한다. 마감 뒤에는 남은 자리를 순번대로 채운다.
+		LectureEntity lecture = gradeCapacityLecture(Map.of(1, 1, 2, 1, 3, 1), LocalDateTime.now().minusHours(1));
+		UserEntity firstGrade = new UserEntity("first@test.com", "first", "1101", Role.USER);
+
+		LectureEnrollmentEntity enrolled = enrollment(lecture, firstGrade, EnrollmentStatus.ENROLLED, 1L);
+		LectureEnrollmentEntity firstWaiting = enrollment(lecture,
+				new UserEntity("second@test.com", "second", "2101", Role.USER), EnrollmentStatus.WAITING, 2L);
+		LectureEnrollmentEntity secondWaiting = enrollment(lecture,
+				new UserEntity("second2@test.com", "second2", "2102", Role.USER), EnrollmentStatus.WAITING, 3L);
+		LectureEnrollmentEntity thirdWaiting = enrollment(lecture,
+				new UserEntity("second3@test.com", "second3", "2103", Role.USER), EnrollmentStatus.WAITING, 4L);
+
+		when(lectureRepository.findAll()).thenReturn(List.of(lecture));
+		when(lectureEnrollmentRepository.findAllByLectureId(1L))
+				.thenReturn(List.of(enrolled, firstWaiting, secondWaiting, thirdWaiting));
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(3L);
+
+		lectureService.syncLectureStatuses();
+
+		assertEquals(EnrollmentStatus.ENROLLED, firstWaiting.getStatus());
+		assertEquals(EnrollmentStatus.ENROLLED, secondWaiting.getStatus());
+		// 정원 3명을 채웠으므로 네 번째는 그대로 대기다.
+		assertEquals(EnrollmentStatus.WAITING, thirdWaiting.getStatus());
+	}
+
+	/** 학년별 정원으로 만든 강연. 강연 자체는 아직 끝나지 않은 시각으로 둔다. */
+	private LectureEntity gradeCapacityLecture(Map<Integer, Integer> capacityByGrade, LocalDateTime applicationDeadline) {
+		LectureEntity lecture = new LectureEntity("title", "description",
+				new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소",
+				LocalDate.now().plusDays(7), LocalTime.NOON, applicationDeadline, null);
+		setId(lecture, 1L);
+		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
+		// 신청은 개설 당일 16:20부터 열린다. 이미 열린 강연으로 둔다.
+		setCreatedAt(lecture, LocalDateTime.now().minusDays(2).toLocalDate().atTime(9, 0));
+		lecture.setCapacityByGrade(capacityByGrade);
+		return lecture;
+	}
+
+	private LectureEnrollmentEntity enrollment(LectureEntity lecture, UserEntity user, EnrollmentStatus status, Long id) {
+		LectureEnrollmentEntity enrollment = new LectureEnrollmentEntity(lecture, user, status);
+		try {
+			Field idField = LectureEnrollmentEntity.class.getDeclaredField("id");
+			idField.setAccessible(true);
+			idField.set(enrollment, id);
+			Field requestedAtField = LectureEnrollmentEntity.class.getDeclaredField("requestedAt");
+			requestedAtField.setAccessible(true);
+			requestedAtField.set(enrollment, LocalDateTime.now().minusDays(1).plusMinutes(id));
+		} catch (ReflectiveOperationException e) {
+			throw new IllegalStateException(e);
+		}
+		return enrollment;
 	}
 
 	private void setId(LectureEntity lecture, Long id) {

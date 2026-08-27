@@ -1,8 +1,10 @@
 package com.example.rels.domain.lecture.service;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.example.rels.domain.lecture.dto.request.AttendanceUpdateRequest;
@@ -178,17 +180,18 @@ public class LectureService {
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
 
-		boolean useGradeCapacity = !capacityByGrade.isEmpty() && userGrade != null && capacityByGrade.containsKey(userGrade);
+		boolean useGradeCapacity = !capacityByGrade.isEmpty();
 		boolean isFull;
 		if (useGradeCapacity) {
-			long gradeEnrolled = lectureEnrollmentRepository.findAllByLectureId(lectureId).stream()
-					.filter(e -> e.getStatus() == EnrollmentStatus.ENROLLED)
-					.filter(e -> {
-						Integer grade = extractGradeFromStudentNumber(e.getUser().getStudentNumber());
-						return grade != null && grade.equals(userGrade);
-					})
-					.count();
-			isFull = gradeEnrolled >= capacityByGrade.get(userGrade);
+			// 학년을 못 읽거나 배정이 없는 학년은 앉을 자리가 없으므로 대기로 받는다.
+			// 마감 뒤 자리가 남으면 그때 순번대로 올라온다.
+			Integer gradeCapacity = userGrade == null ? null : capacityByGrade.get(userGrade);
+			if (gradeCapacity == null) {
+				isFull = true;
+			} else {
+				long gradeEnrolled = countEnrolledInGrade(lectureId, userGrade);
+				isFull = gradeEnrolled >= gradeCapacity;
+			}
 		} else if (totalCapacity != null && totalCapacity > 0) {
 			isFull = enrolledCount >= totalCapacity;
 		} else {
@@ -209,10 +212,11 @@ public class LectureService {
 		return new EnrollmentResponse(lectureId, status.name(), nextEnrolledCount, nextWaitingCount, savedEnrollment.getRequestedAt());
 	}
 
+	/** 학번 "2204"의 맨 앞자리가 학년이다. 두 번째 자리는 반이므로 읽으면 안 된다. */
 	private Integer extractGradeFromStudentNumber(String studentNumber) {
 		if (studentNumber == null || studentNumber.isEmpty()) return null;
 		try {
-			return Integer.parseInt(studentNumber.substring(1, 2));
+			return Integer.parseInt(studentNumber.substring(0, 1));
 		} catch (Exception e) {
 			return null;
 		}
@@ -228,7 +232,7 @@ public class LectureService {
 		lectureEnrollmentRepository.delete(enrollment);
 
 		if (canceledStatus == EnrollmentStatus.ENROLLED) {
-			promoteFirstWaitingUser(lectureId);
+			promoteFirstWaitingUser(lecture, LocalDateTime.now());
 		}
 
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
@@ -278,10 +282,79 @@ public class LectureService {
 		}
 	}
 
-	private void promoteFirstWaitingUser(Long lectureId) {
-		lectureEnrollmentRepository.findFirstByLectureIdAndStatusOrderByRequestedAtAscIdAsc(lectureId,
-						EnrollmentStatus.WAITING)
-				.ifPresent(LectureEnrollmentEntity::promoteToEnrolled);
+	/**
+	 * 자리가 비면 대기자 한 명을 올린다.
+	 *
+	 * 신청을 받는 동안에는 자리가 남은 학년의 대기자만 올라올 수 있다. 맨 앞 대기자를
+	 * 그냥 올리면 1학년이 비운 자리를 2학년이 채워 학년 정원이 넘칠 수 있기 때문이다.
+	 * 마감 뒤에는 학년 정원을 더 보지 않고 전체 정원까지 순번대로 올린다.
+	 */
+	private void promoteFirstWaitingUser(LectureEntity lecture, LocalDateTime now) {
+		Long lectureId = lecture.getId();
+		List<LectureEnrollmentEntity> enrollments = lectureEnrollmentRepository.findAllByLectureId(lectureId);
+
+		List<LectureEnrollmentEntity> enrolled = enrollments.stream()
+				.filter(e -> e.getStatus() == EnrollmentStatus.ENROLLED)
+				.toList();
+
+		int capacity = resolveTotalCapacity(lecture);
+		if (capacity > 0 && enrolled.size() >= capacity) {
+			return;
+		}
+
+		List<LectureEnrollmentEntity> waiting = sortByRequestedOrder(enrollments.stream()
+				.filter(e -> e.getStatus() == EnrollmentStatus.WAITING)
+				.toList());
+		if (waiting.isEmpty()) {
+			return;
+		}
+
+		Map<Integer, Integer> capacityByGrade = lecture.getCapacityByGrade();
+		boolean useGradeCapacity = capacityByGrade != null && !capacityByGrade.isEmpty()
+				&& !isAfterApplicationDeadline(lecture, now);
+
+		if (!useGradeCapacity) {
+			waiting.get(0).promoteToEnrolled();
+			return;
+		}
+
+		for (LectureEnrollmentEntity candidate : waiting) {
+			Integer grade = extractGradeFromStudentNumber(candidate.getUser().getStudentNumber());
+			Integer gradeCapacity = grade == null ? null : capacityByGrade.get(grade);
+			if (gradeCapacity == null) {
+				continue;
+			}
+
+			long taken = enrolled.stream()
+					.filter(e -> grade.equals(extractGradeFromStudentNumber(e.getUser().getStudentNumber())))
+					.count();
+			if (taken < gradeCapacity) {
+				candidate.promoteToEnrolled();
+				return;
+			}
+		}
+	}
+
+	private long countEnrolledInGrade(Long lectureId, Integer grade) {
+		return lectureEnrollmentRepository.findAllByLectureId(lectureId).stream()
+				.filter(e -> e.getStatus() == EnrollmentStatus.ENROLLED)
+				.filter(e -> grade.equals(extractGradeFromStudentNumber(e.getUser().getStudentNumber())))
+				.count();
+	}
+
+	/** 신청 순서. 신청 시각이 같으면 먼저 저장된 쪽이 앞선다. */
+	private List<LectureEnrollmentEntity> sortByRequestedOrder(List<LectureEnrollmentEntity> enrollments) {
+		return enrollments.stream()
+				.sorted(Comparator
+						.comparing(LectureEnrollmentEntity::getRequestedAt,
+								Comparator.nullsLast(Comparator.naturalOrder()))
+						.thenComparing(LectureEnrollmentEntity::getId,
+								Comparator.nullsLast(Comparator.naturalOrder())))
+				.toList();
+	}
+
+	private boolean isAfterApplicationDeadline(LectureEntity lecture, LocalDateTime now) {
+		return lecture.getApplicationDeadline() != null && now.isAfter(lecture.getApplicationDeadline());
 	}
 
 	private LectureSummaryResponse toLectureSummary(LectureEntity lecture,
@@ -449,8 +522,65 @@ public class LectureService {
 	private void syncLectureStatuses(LocalDateTime now) {
 		List<LectureEntity> lectures = lectureRepository.findAll();
 		for (LectureEntity lecture : lectures) {
+			promoteWaitingAfterDeadline(lecture, now);
 			refreshLectureLifecycle(lecture, now);
 		}
+	}
+
+	/**
+	 * 신청 마감이 지나면 비어 있는 자리를 대기자로 채운다.
+	 * 학년별 정원은 신청을 받는 동안만 적용하고, 마감 뒤에는 전체 정원까지 신청 순서대로 올린다.
+	 */
+	private void promoteWaitingAfterDeadline(LectureEntity lecture, LocalDateTime now) {
+		if (lecture.getId() == null || lecture.getStatus() == LectureStatus.CLOSE) {
+			return;
+		}
+
+		if (!isAfterApplicationDeadline(lecture, now)) {
+			return;
+		}
+
+		int capacity = resolveTotalCapacity(lecture);
+		if (capacity <= 0) {
+			return;
+		}
+
+		List<LectureEnrollmentEntity> enrollments = lectureEnrollmentRepository.findAllByLectureId(lecture.getId());
+		long enrolledCount = enrollments.stream()
+				.filter(e -> e.getStatus() == EnrollmentStatus.ENROLLED)
+				.count();
+		if (enrolledCount >= capacity) {
+			return;
+		}
+
+		List<LectureEnrollmentEntity> waiting = sortByRequestedOrder(enrollments.stream()
+				.filter(e -> e.getStatus() == EnrollmentStatus.WAITING)
+				.toList());
+
+		for (LectureEnrollmentEntity enrollment : waiting) {
+			if (enrolledCount >= capacity) {
+				break;
+			}
+			enrollment.promoteToEnrolled();
+			enrolledCount++;
+		}
+	}
+
+	/** 전체 정원. 학년별로 나눈 강연은 학년 정원의 합이 전체 정원이 된다. */
+	private int resolveTotalCapacity(LectureEntity lecture) {
+		if (lecture.getTotalCapacity() != null) {
+			return lecture.getTotalCapacity();
+		}
+
+		Map<Integer, Integer> capacityByGrade = lecture.getCapacityByGrade();
+		if (capacityByGrade == null || capacityByGrade.isEmpty()) {
+			return 0;
+		}
+
+		return capacityByGrade.values().stream()
+				.filter(Objects::nonNull)
+				.mapToInt(Integer::intValue)
+				.sum();
 	}
 
 	private void refreshLectureLifecycle(LectureEntity lecture, LocalDateTime now) {
