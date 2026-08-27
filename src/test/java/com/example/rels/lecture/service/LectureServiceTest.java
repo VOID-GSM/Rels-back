@@ -417,6 +417,63 @@ class LectureServiceTest {
 		assertEquals(EnrollmentStatus.WAITING, thirdWaiting.getStatus());
 	}
 
+	@Test
+	void enrollOpensAtSchoolTimeEvenThoughServerRunsInUtc() {
+		// 서버는 UTC로 돌지만 16:20은 한국 시간 기준이다. UTC now로 비교하면
+		// 한국 시간 오후 내내 "아직 신청 전"이 되어 403이 난다.
+		LocalDateTime nowInSchoolTime = LocalDateTime.of(2026, 8, 27, 20, 34);
+		LectureService service = new LectureService(lectureRepository, lectureEnrollmentRepository, userRepository) {
+			@Override
+			protected LocalDateTime schoolTimeNow() {
+				return nowInSchoolTime;
+			}
+		};
+
+		LectureEntity lecture = new LectureEntity("title", "description",
+				new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소",
+				LocalDate.of(2026, 8, 29), LocalTime.NOON, LocalDateTime.of(2026, 8, 28, 23, 0), 30);
+		setId(lecture, 1L);
+		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
+		// 한국 시간 2026-08-27 10:00에 개설한 강연은 서버에 UTC 01:00으로 찍힌다.
+		setCreatedAt(lecture, LocalDateTime.of(2026, 8, 27, 1, 0));
+
+		UserEntity applicant = new UserEntity("user@test.com", "user", "2204", Role.USER);
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+		when(userRepository.findById(2L)).thenReturn(Optional.of(applicant));
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.empty());
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
+
+		EnrollmentResponse response = service.enroll(1L, 2L);
+
+		assertEquals("ENROLLED", response.enrollmentStatus());
+	}
+
+	@Test
+	void enrollRejectsBeforeSchoolTimeOpens() {
+		LocalDateTime nowInSchoolTime = LocalDateTime.of(2026, 8, 27, 15, 0);
+		LectureService service = new LectureService(lectureRepository, lectureEnrollmentRepository, userRepository) {
+			@Override
+			protected LocalDateTime schoolTimeNow() {
+				return nowInSchoolTime;
+			}
+		};
+
+		LectureEntity lecture = new LectureEntity("title", "description",
+				new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소",
+				LocalDate.of(2026, 8, 29), LocalTime.NOON, LocalDateTime.of(2026, 8, 28, 23, 0), 30);
+		setId(lecture, 1L);
+		setApprovalStatus(lecture, ApprovalStatus.APPROVED);
+		setCreatedAt(lecture, LocalDateTime.of(2026, 8, 27, 1, 0));
+
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+
+		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class,
+				() -> service.enroll(1L, 2L));
+
+		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+	}
+
 	/** 학년별 정원으로 만든 강연. 강연 자체는 아직 끝나지 않은 시각으로 둔다. */
 	private LectureEntity gradeCapacityLecture(Map<Integer, Integer> capacityByGrade, LocalDateTime applicationDeadline) {
 		LectureEntity lecture = new LectureEntity("title", "description",
