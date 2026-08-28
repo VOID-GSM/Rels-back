@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.example.rels.domain.lecture.service.LectureLifecycleHandler;
+import com.example.rels.domain.lecture.service.LectureTimeValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -67,7 +69,16 @@ class LectureServiceTest {
 
 	@BeforeEach
 	void setUp() {
-		lectureService = new LectureService(lectureRepository, lectureEnrollmentRepository, userRepository);
+		LectureTimeValidator timeValidatorMock = org.mockito.Mockito.mock(LectureTimeValidator.class);
+		LectureLifecycleHandler lifecycleHandlerMock = org.mockito.Mockito.mock(LectureLifecycleHandler.class);
+
+		lectureService = new LectureService(
+				lectureRepository,
+				lectureEnrollmentRepository,
+				userRepository,
+				timeValidatorMock,
+				lifecycleHandlerMock
+		);
 
 		LectureEnrollmentEntity savedMock = org.mockito.Mockito.mock(LectureEnrollmentEntity.class);
 		org.mockito.Mockito.lenient().when(savedMock.getRequestedAt()).thenReturn(LocalDateTime.now());
@@ -265,8 +276,7 @@ class LectureServiceTest {
 				20,
 				"장소",
 				LocalDate.now().plusDays(1),
-				LocalTime.NOON,
-				LocalDateTime.now().plusDays(1));
+				LocalTime.NOON);
 
 		var exception = assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> lectureService.createLecture(1L, request));
 
@@ -518,8 +528,7 @@ class LectureServiceTest {
 				20,
 				"updated 장소",
 				LocalDate.now().plusDays(2),
-				LocalTime.NOON,
-				LocalDateTime.now().plusDays(2)
+				LocalTime.NOON
 		);
 
 		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
@@ -568,8 +577,7 @@ class LectureServiceTest {
 				20,
 				"updated 장소",
 				LocalDate.now().plusDays(2),
-				LocalTime.NOON,
-				LocalDateTime.now().plusDays(2)
+				LocalTime.NOON
 		);
 
 		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
@@ -618,8 +626,7 @@ class LectureServiceTest {
 				20,
 				"updated 장소",
 				LocalDate.now().plusDays(2),
-				LocalTime.NOON,
-				LocalDateTime.now().plusDays(2)
+				LocalTime.NOON
 		);
 
 		LectureDetailResponse response = lectureService.updateLecture(1L, 1L, Role.USER, request);
