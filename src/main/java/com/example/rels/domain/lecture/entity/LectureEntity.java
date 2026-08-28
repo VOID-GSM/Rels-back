@@ -1,21 +1,21 @@
 package com.example.rels.domain.lecture.entity;
 
-import java.util.HashMap;
-import java.util.Map;
-import jakarta.persistence.ElementCollection;
-import jakarta.persistence.CollectionTable;
-import jakarta.persistence.MapKeyColumn;
-
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.TemporalAdjusters;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import com.example.rels.domain.user.entity.UserEntity;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -25,11 +25,13 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.MapKeyColumn;
 import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "lectures")
 public class LectureEntity {
+
 	@ElementCollection
 	@CollectionTable(name = "lecture_capacity_by_grade", joinColumns = @JoinColumn(name = "lecture_id"))
 	@MapKeyColumn(name = "grade")
@@ -63,7 +65,7 @@ public class LectureEntity {
 	@Column(name = "lecture_time")
 	private LocalTime lectureTime;
 
-	@Column(name = "application_deadline", nullable = false)
+	@Column(name = "application_deadline")
 	private LocalDateTime applicationDeadline;
 
 	@Column(name = "total_capacity")
@@ -96,8 +98,12 @@ public class LectureEntity {
 		this.lectureLocation = lectureLocation;
 		this.lectureDate = lectureDate;
 		this.lectureTime = lectureTime;
-		this.applicationDeadline = applicationDeadline;
+		this.applicationDeadline = applicationDeadline != null ? applicationDeadline : calculateDeadline(lectureDate);
 		this.totalCapacity = totalCapacity;
+	}
+
+	public LectureEntity(String title, String description, UserEntity creator, String lectureLocation, LocalDate lectureDate, LocalTime lectureTime, Integer totalCapacity) {
+		this(title, description, creator, lectureLocation, lectureDate, lectureTime, calculateDeadline(lectureDate), totalCapacity);
 	}
 
 	public LectureEntity(String title, String description, UserEntity creator) {
@@ -190,7 +196,11 @@ public class LectureEntity {
 		this.lectureLocation = lectureLocation;
 		this.lectureDate = lectureDate;
 		this.lectureTime = lectureTime;
-		this.applicationDeadline = applicationDeadline;
+		this.applicationDeadline = applicationDeadline != null ? applicationDeadline : calculateDeadline(lectureDate);
+	}
+
+	public void updateAllDetails(String title, String description, Map<Integer, Integer> capacityByGrade, Integer totalCapacity, String lectureLocation, LocalDate lectureDate, LocalTime lectureTime) {
+		updateAllDetails(title, description, capacityByGrade, totalCapacity, lectureLocation, lectureDate, lectureTime, calculateDeadline(lectureDate));
 	}
 
 	public void setStatus(LectureStatus status) {
@@ -208,5 +218,14 @@ public class LectureEntity {
 	public void updateApprovalStatus(ApprovalStatus approvalStatus, String rejectionReason) {
 		this.approvalStatus = approvalStatus;
 		this.rejectionReason = rejectionReason;
+	}
+
+	private static LocalDateTime calculateDeadline(LocalDate lectureDate) {
+		if (lectureDate == null) {
+			return null;
+		}
+		LocalDate startOfWeek = lectureDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+		LocalDate previousThursday = startOfWeek.minusDays(4);
+		return LocalDateTime.of(previousThursday, LocalTime.of(23, 59, 59));
 	}
 }
