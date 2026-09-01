@@ -82,6 +82,22 @@ class LectureEnrollmentServiceTest {
     }
 
     @Test
+    void enrollRejectsSpeaker() {
+        UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+        UserEntity speaker = TestEntityFactory.createUser("speaker@test.com", "speaker", "1000000001", Role.USER, 2L);
+        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(2), LocalTime.NOON, LocalDateTime.now().plusDays(1), 30, 1L);
+        lecture.updateSpeakers(java.util.Set.of(speaker));
+
+        when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(speaker));
+
+        var exception = assertThrows(ResponseStatusException.class, () -> lectureService.enroll(1L, 2L));
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        verify(lectureEnrollmentRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("수강 신청 오픈 시간 전 신청 시 예외가 발생한다")
     void enrollRejectsBeforeOpenTime() {
         UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);

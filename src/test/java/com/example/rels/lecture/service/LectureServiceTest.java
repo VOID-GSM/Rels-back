@@ -36,6 +36,7 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -82,7 +83,7 @@ class LectureServiceTest {
 		LectureEntity secondLecture = TestEntityFactory.createLecture("title2", "description2", creator, "장소2", LocalDate.now(), LocalTime.NOON, LocalDateTime.now().plusDays(1), null, 12L);
 
 		Pageable pageable = PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "createdAt"));
-		when(lectureRepository.findAllByApprovalStatusOrCreatorIdOrderByCreatedAtDesc(eq(ApprovalStatus.APPROVED), eq(2L), any()))
+		when(lectureRepository.findVisibleToUser(eq(ApprovalStatus.APPROVED), eq(2L), any()))
 				.thenReturn(new PageImpl<>(List.of(firstLecture, secondLecture), pageable, 2));
 
 		LectureEnrollmentCountProjection projection1_enrolled = mock(LectureEnrollmentCountProjection.class);
@@ -128,7 +129,7 @@ class LectureServiceTest {
 		LectureEntity endedLecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().minusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null, 11L);
 
 		Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
-		when(lectureRepository.findAllByApprovalStatusOrCreatorIdOrderByCreatedAtDesc(eq(ApprovalStatus.APPROVED), eq(2L), any()))
+		when(lectureRepository.findVisibleToUser(eq(ApprovalStatus.APPROVED), eq(2L), any()))
 				.thenReturn(new PageImpl<>(List.of(endedLecture), pageable, 1));
 
 		LectureEnrollmentCountProjection projection_enrolled = mock(LectureEnrollmentCountProjection.class);
@@ -174,7 +175,7 @@ class LectureServiceTest {
 		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
 		lenient().when(userRepository.findById(1L)).thenReturn(Optional.of(creator));
 
-		var request = new LectureCreateRequest("title", "description", Map.of(1, 10), 20, "장소", LocalDate.now().plusDays(1), LocalTime.NOON);
+		var request = new LectureCreateRequest("title", "description", Map.of(1, 10), 20, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, Set.of());
 
 		var exception = assertThrows(ResponseStatusException.class, () -> lectureService.createLecture(1L, request));
 		assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
@@ -185,7 +186,7 @@ class LectureServiceTest {
 		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
 		LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20, 1L);
 
-		LectureUpdateRequest request = new LectureUpdateRequest("updated title", "updated description", null, 20, "updated 장소", LocalDate.now().plusDays(2), LocalTime.NOON);
+		LectureUpdateRequest request = new LectureUpdateRequest("updated title", "updated description", null, 20, "updated 장소", LocalDate.now().plusDays(2), LocalTime.NOON, Set.of());
 
 		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
 		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
@@ -203,7 +204,7 @@ class LectureServiceTest {
 		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
 		LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20, 1L);
 
-		LectureUpdateRequest request = new LectureUpdateRequest("updated title", "updated description", null, 20, "updated 장소", LocalDate.now().plusDays(2), LocalTime.NOON);
+		LectureUpdateRequest request = new LectureUpdateRequest("updated title", "updated description", null, 20, "updated 장소", LocalDate.now().plusDays(2), LocalTime.NOON, Set.of());
 
 		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
 

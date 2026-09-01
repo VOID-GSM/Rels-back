@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Map;
+import java.util.List;
 
 
 
@@ -15,6 +16,7 @@ public record LectureDetailResponse(
 		Long creatorId,
 		String creatorName,
 		String creatorStudentNumber,
+		List<LectureSpeakerResponse> speakers,
 		String lectureStatus,
 		String approvalStatus,
 		String rejectionReason,

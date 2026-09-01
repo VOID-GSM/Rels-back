@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Map;
+import java.util.Set;
 
 public record LectureCreateRequest(
 		@NotBlank @Size(max = 100) String title,
@@ -16,6 +17,7 @@ public record LectureCreateRequest(
 		Integer totalCapacity,
 		@NotBlank @Size(max = 255) String lectureLocation,
 		@NotNull LocalDate lectureDate,
-		@NotNull LocalTime lectureTime
+		@NotNull LocalTime lectureTime,
+		Set<@NotNull Long> speakerIds
 ) {
 }

@@ -17,18 +17,21 @@ import jakarta.persistence.LockModeType;
 
 public interface LectureRepository extends JpaRepository<LectureEntity, Long> {
 
-	@EntityGraph(attributePaths = "creator")
+	@EntityGraph(attributePaths = {"creator", "speakers"})
 	Page<LectureEntity> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
-	@EntityGraph(attributePaths = "creator")
+	@EntityGraph(attributePaths = {"creator", "speakers"})
 	Page<LectureEntity> findAllByApprovalStatusOrderByCreatedAtDesc(ApprovalStatus approvalStatus, Pageable pageable);
 
-	@EntityGraph(attributePaths = "creator")
-	Page<LectureEntity> findAllByApprovalStatusOrCreatorIdOrderByCreatedAtDesc(ApprovalStatus approvalStatus, Long creatorId, Pageable pageable);
+	@EntityGraph(attributePaths = {"creator", "speakers"})
+	@Query("select distinct l from LectureEntity l left join l.speakers s where l.approvalStatus = :approvalStatus or l.creator.id = :userId or s.id = :userId")
+	Page<LectureEntity> findVisibleToUser(ApprovalStatus approvalStatus, Long userId, Pageable pageable);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select l from LectureEntity l where l.id = :lectureId")
 	Optional<LectureEntity> findByIdForUpdate(Long lectureId);
 
-	List<LectureEntity> findAllByCreatorIdOrderByCreatedAtDesc(Long creatorId);
+	@EntityGraph(attributePaths = {"creator", "speakers"})
+	@Query("select distinct l from LectureEntity l join l.speakers s where s.id = :userId order by l.createdAt desc")
+	List<LectureEntity> findAllBySpeakerIdOrderByCreatedAtDesc(Long userId);
 }

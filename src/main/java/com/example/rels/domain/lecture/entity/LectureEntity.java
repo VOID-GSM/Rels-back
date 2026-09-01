@@ -6,7 +6,9 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -24,6 +26,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.MapKeyColumn;
 import jakarta.persistence.Table;
@@ -51,6 +55,12 @@ public class LectureEntity {
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "creator_id", nullable = false)
 	private UserEntity creator;
+
+	@ManyToMany(fetch = FetchType.LAZY)
+	@JoinTable(name = "lecture_speakers",
+			joinColumns = @JoinColumn(name = "lecture_id"),
+			inverseJoinColumns = @JoinColumn(name = "user_id"))
+	private Set<UserEntity> speakers = new LinkedHashSet<>();
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
@@ -96,6 +106,7 @@ public class LectureEntity {
 		this.title = title;
 		this.description = description;
 		this.creator = creator;
+		this.speakers.add(creator);
 		this.status = LectureStatus.OPEN;
 		this.capacityByGrade = new HashMap<>();
 		this.lectureLocation = lectureLocation;
@@ -141,6 +152,22 @@ public class LectureEntity {
 
 	public UserEntity getCreator() {
 		return creator;
+	}
+
+	public Set<UserEntity> getSpeakers() {
+		return Set.copyOf(speakers);
+	}
+
+	public boolean isSpeaker(Long userId) {
+		return userId != null && speakers.stream().anyMatch(speaker -> speaker.getId().equals(userId));
+	}
+
+	public void updateSpeakers(Set<UserEntity> speakers) {
+		this.speakers.clear();
+		this.speakers.add(creator);
+		if (speakers != null) {
+			this.speakers.addAll(speakers);
+		}
 	}
 
 	public LectureStatus getStatus() {
