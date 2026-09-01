@@ -5,6 +5,7 @@ import com.example.rels.domain.lecture.service.LectureService;
 import com.example.rels.domain.lecture.service.LectureTimeValidator;
 import com.example.rels.domain.user.entity.Role;
 import com.example.rels.domain.lecture.dto.response.EnrollmentResponse;
+import com.example.rels.domain.lecture.dto.request.EnrollmentDecisionRequest;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
 import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
 import com.example.rels.domain.lecture.entity.LectureEntity;
@@ -160,6 +161,26 @@ class LectureEnrollmentServiceTest {
     }
 
     @Test
+    void enrollAfterApplicationDeadlineAddsUserToWaitingList() {
+        UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+        UserEntity applicant = TestEntityFactory.createUser("user@test.com", "user", "1000000001", Role.USER, 2L);
+        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(2), LocalTime.NOON, LocalDateTime.now().minusMinutes(1), 30, 1L);
+
+        when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(applicant));
+        when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.empty());
+        when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
+        when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
+
+        EnrollmentResponse response = lectureService.enroll(1L, 2L);
+
+        ArgumentCaptor<LectureEnrollmentEntity> captor = ArgumentCaptor.forClass(LectureEnrollmentEntity.class);
+        verify(lectureEnrollmentRepository).save(captor.capture());
+        assertEquals(EnrollmentStatus.WAITING, captor.getValue().getStatus());
+        assertEquals("WAITING", response.enrollmentStatus());
+    }
+
+    @Test
     void enrollReadsGradeFromFirstDigitOfStudentNumber() {
         LectureEntity lecture = TestEntityFactory.createGradeCapacityLecture(Map.of(1, 1, 2, 1, 3, 1), LocalDateTime.now().plusDays(1), 3);
         UserEntity secondGrade = TestEntityFactory.createUser("second@test.com", "second", "2204", Role.USER, 1L);
@@ -179,7 +200,7 @@ class LectureEnrollmentServiceTest {
     }
 
     @Test
-    void cancelPromotesFirstWaitingUser() {
+    void cancelDoesNotAutomaticallyPromoteWaitingUser() {
         UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
         LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now(), LocalTime.NOON, LocalDateTime.now().plusDays(1), 30, 1L);
         UserEntity applicant = TestEntityFactory.createUser("user@test.com", "user", "1000000001", Role.USER, 2L);
@@ -190,19 +211,18 @@ class LectureEnrollmentServiceTest {
 
         when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
         when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(enrolled));
-        when(lectureEnrollmentRepository.findAllByLectureId(1L)).thenReturn(List.of(waiting));
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(29L);
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(1L);
 
         EnrollmentResponse response = lectureService.cancelEnrollment(1L, 2L);
 
         verify(lectureEnrollmentRepository).delete(enrolled);
-        assertEquals(EnrollmentStatus.ENROLLED, waiting.getStatus());
+        assertEquals(EnrollmentStatus.WAITING, waiting.getStatus());
         assertEquals("CANCELED", response.enrollmentStatus());
     }
 
     @Test
-    void cancelPromotesWaitingUserOfTheGradeThatFreedUpSeat() {
+    void cancelDoesNotAutomaticallyPromoteWaitingUserOfFreedUpGrade() {
         LectureEntity lecture = TestEntityFactory.createGradeCapacityLecture(Map.of(1, 1, 2, 1), LocalDateTime.now().plusDays(1), 2);
         UserEntity firstGrade = TestEntityFactory.createUser("first@test.com", "first", "1101", Role.USER, 1L);
         UserEntity secondGrade = TestEntityFactory.createUser("second@test.com", "second", "2101", Role.USER, 2L);
@@ -214,18 +234,17 @@ class LectureEnrollmentServiceTest {
 
         when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
         when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(canceled));
-        when(lectureEnrollmentRepository.findAllByLectureId(1L)).thenReturn(List.of(stillEnrolled, waitingSecondGrade, waitingFirstGrade));
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(1L);
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(1L);
 
         lectureService.cancelEnrollment(1L, 2L);
 
         assertEquals(EnrollmentStatus.WAITING, waitingSecondGrade.getStatus());
-        assertEquals(EnrollmentStatus.ENROLLED, waitingFirstGrade.getStatus());
+        assertEquals(EnrollmentStatus.WAITING, waitingFirstGrade.getStatus());
     }
 
     @Test
-    void syncPromotesWaitingUsersUpToTotalCapacityAfterDeadline() {
+    void syncDoesNotAutomaticallyPromoteWaitingUsersAfterDeadline() {
         LectureEntity lecture = TestEntityFactory.createGradeCapacityLecture(Map.of(1, 1, 2, 1, 3, 1), LocalDateTime.now().minusHours(1), 3);
         UserEntity firstGrade = TestEntityFactory.createUser("first@test.com", "first", "1101", Role.USER, 1L);
 
@@ -235,13 +254,51 @@ class LectureEnrollmentServiceTest {
         LectureEnrollmentEntity thirdWaiting = TestEntityFactory.createEnrollment(lecture, TestEntityFactory.createUser("second3@test.com", "second3", "2103", Role.USER, 4L), EnrollmentStatus.WAITING, 4L);
 
         when(lectureRepository.findAll()).thenReturn(List.of(lecture));
-        when(lectureEnrollmentRepository.findAllByLectureId(1L)).thenReturn(List.of(enrolled, firstWaiting, secondWaiting, thirdWaiting));
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(1L);
 
         lectureService.syncLectureStatuses();
 
-        assertEquals(EnrollmentStatus.ENROLLED, firstWaiting.getStatus());
-        assertEquals(EnrollmentStatus.ENROLLED, secondWaiting.getStatus());
+        assertEquals(EnrollmentStatus.WAITING, firstWaiting.getStatus());
+        assertEquals(EnrollmentStatus.WAITING, secondWaiting.getStatus());
         assertEquals(EnrollmentStatus.WAITING, thirdWaiting.getStatus());
+    }
+    @Test
+    void creatorCanAcceptWaitingUserEvenWhenCapacityIsFull() {
+        UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+        UserEntity waitingUser = TestEntityFactory.createUser("wait@test.com", "wait", "1000000001", Role.USER, 2L);
+        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(2), LocalTime.NOON, LocalDateTime.now().minusMinutes(1), 10, 1L);
+        LectureEnrollmentEntity waiting = TestEntityFactory.createEnrollment(lecture, waitingUser, EnrollmentStatus.WAITING, 2L);
+
+        when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+        when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(waiting));
+        when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(10L);
+        when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(1L);
+
+        EnrollmentResponse response = lectureService.decideWaitingEnrollment(1L, 2L, 1L, Role.USER, new EnrollmentDecisionRequest(true));
+
+        assertEquals(EnrollmentStatus.ENROLLED, waiting.getStatus());
+        assertEquals("ENROLLED", response.enrollmentStatus());
+        assertEquals(11L, response.enrolledCount());
+        assertEquals(0L, response.waitingCount());
+    }
+
+    @Test
+    void creatorCanRejectWaitingUser() {
+        UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+        UserEntity waitingUser = TestEntityFactory.createUser("wait@test.com", "wait", "1000000001", Role.USER, 2L);
+        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(2), LocalTime.NOON, LocalDateTime.now().minusMinutes(1), 10, 1L);
+        LectureEnrollmentEntity waiting = TestEntityFactory.createEnrollment(lecture, waitingUser, EnrollmentStatus.WAITING, 2L);
+
+        when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+        when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(waiting));
+        when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(10L);
+        when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(1L);
+
+        EnrollmentResponse response = lectureService.decideWaitingEnrollment(1L, 2L, 1L, Role.USER, new EnrollmentDecisionRequest(false));
+
+        assertEquals(EnrollmentStatus.REJECTED, waiting.getStatus());
+        assertEquals("REJECTED", response.enrollmentStatus());
+        assertEquals(10L, response.enrolledCount());
+        assertEquals(0L, response.waitingCount());
     }
 }

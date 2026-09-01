@@ -4,6 +4,7 @@ import java.util.List;
 
 public record EnrollmentListResponse(
     List<EnrollmentUserResponse> enrolled,
-    List<EnrollmentUserResponse> waiting
+    List<EnrollmentUserResponse> waiting,
+    List<EnrollmentUserResponse> rejected
 ) {}
 
