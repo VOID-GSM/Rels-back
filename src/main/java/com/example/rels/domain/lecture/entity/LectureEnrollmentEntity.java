@@ -81,6 +81,10 @@ public class LectureEnrollmentEntity {
 		this.status = EnrollmentStatus.ENROLLED;
 	}
 
+	public void reject() {
+		this.status = EnrollmentStatus.REJECTED;
+	}
+
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
 	private AttendanceStatus attendanceStatus = AttendanceStatus.NONE;
