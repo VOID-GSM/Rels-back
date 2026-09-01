@@ -26,7 +26,7 @@ public class TestEntityFactory {
                                               Integer totalCapacity, Long id) {
         LectureEntity lecture = new LectureEntity(title, description, creator, location, lectureDate, lectureTime, deadline, totalCapacity);
         setField(lecture, "id", id);
-        setSuperField(lecture, "createdAt", LocalDateTime.now().minusDays(2));
+        setField(lecture, "createdAt", LocalDateTime.now().minusDays(2));
         setApprovalStatus(lecture, ApprovalStatus.APPROVED);
         return lecture;
     }
@@ -41,27 +41,23 @@ public class TestEntityFactory {
     public static LectureEnrollmentEntity createEnrollment(LectureEntity lecture, UserEntity user, EnrollmentStatus status, Long id) {
         LectureEnrollmentEntity enrollment = new LectureEnrollmentEntity(lecture, user, status);
         setField(enrollment, "id", id);
-        setField(enrollment, "requestedAt", LocalDateTime.now().minusDays(1).plusMinutes(id));
+        setField(enrollment, "requestedAt", LocalDateTime.now().minusDays(1).plusMinutes(id != null ? id : 0));
         return enrollment;
     }
 
     private static void setField(Object target, String fieldName, Object value) {
-        try {
-            Field field = target.getClass().getDeclaredField(fieldName);
-            field.setAccessible(true);
-            field.set(target, value);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException(fieldName + " 설정 실패", e);
-        }
-    }
-
-    private static void setSuperField(Object target, String fieldName, Object value) {
-        try {
-            Field field = target.getClass().getSuperclass().getDeclaredField(fieldName);
-            field.setAccessible(true);
-            field.set(target, value);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException(fieldName + " 상위 필드 설정 실패", e);
+        Class<?> clazz = target.getClass();
+        while (clazz != null) {
+            try {
+                Field field = clazz.getDeclaredField(fieldName);
+                field.setAccessible(true);
+                field.set(target, value);
+                return;
+            } catch (NoSuchFieldException e) {
+                clazz = clazz.getSuperclass();
+            } catch (IllegalAccessException e) {
+                throw new IllegalStateException(fieldName + " 필드 설정 오류", e);
+            }
         }
     }
 
