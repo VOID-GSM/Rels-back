@@ -175,7 +175,7 @@ class LectureServiceTest {
 		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
 		lenient().when(userRepository.findById(1L)).thenReturn(Optional.of(creator));
 
-		var request = new LectureCreateRequest("title", "description", Map.of(1, 10), 20, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, Set.of());
+		var request = new LectureCreateRequest("title", "description", Map.of(1, 10), 20, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, null, Set.of());
 
 		var exception = assertThrows(ResponseStatusException.class, () -> lectureService.createLecture(1L, request));
 		assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
@@ -184,10 +184,11 @@ class LectureServiceTest {
 	@Test
 	void createLectureAllowsCapacityAboveThirty() {
 		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
-		var request = new LectureCreateRequest("title", "description", null, 31, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, Set.of());
+		var request = new LectureCreateRequest("title", "description", null, 31, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, null, Set.of());
 
 		when(userRepository.findById(1L)).thenReturn(Optional.of(creator));
-		when(timeValidator.calculateApplicationDeadline(request.lectureDate())).thenReturn(LocalDateTime.now().plusDays(1));
+		when(timeValidator.resolveApplicationDeadline(request.applicationDeadline(), request.lectureDate(), request.lectureTime()))
+				.thenReturn(LocalDateTime.now().plusDays(1));
 		when(lectureRepository.save(any(LectureEntity.class))).thenAnswer(invocation -> {
 			LectureEntity lecture = invocation.getArgument(0);
 			TestEntityFactory.setId(lecture, 1L);
@@ -207,7 +208,7 @@ class LectureServiceTest {
 		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
 		LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20, 1L);
 
-		LectureUpdateRequest request = new LectureUpdateRequest("updated title", "updated description", null, 20, "updated 장소", LocalDate.now().plusDays(2), LocalTime.NOON, Set.of());
+		LectureUpdateRequest request = new LectureUpdateRequest("updated title", "updated description", null, 20, "updated 장소", LocalDate.now().plusDays(2), LocalTime.NOON, null, Set.of());
 
 		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
 		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
@@ -225,7 +226,7 @@ class LectureServiceTest {
 		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
 		LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20, 1L);
 
-		LectureUpdateRequest request = new LectureUpdateRequest("updated title", "updated description", null, 20, "updated 장소", LocalDate.now().plusDays(2), LocalTime.NOON, Set.of());
+		LectureUpdateRequest request = new LectureUpdateRequest("updated title", "updated description", null, 20, "updated 장소", LocalDate.now().plusDays(2), LocalTime.NOON, null, Set.of());
 
 		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
 

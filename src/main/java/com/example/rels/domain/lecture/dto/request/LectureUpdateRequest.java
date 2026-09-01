@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Map;
 import java.util.Set;
@@ -18,6 +19,7 @@ public record LectureUpdateRequest(
 		@NotBlank @Size(max = 255) String lectureLocation,
 		@NotNull LocalDate lectureDate,
 		@NotNull LocalTime lectureTime,
+		LocalDateTime applicationDeadline,
 		Set<@NotNull Long> speakerIds
 ) {
 }

@@ -22,6 +22,30 @@ public class LectureTimeValidator {
         return LocalDateTime.of(previousThursday, LocalTime.of(23, 59, 59));
     }
 
+    /**
+     * 개설자가 입력한 신청 마감 시각을 확정합니다.
+     *
+     * 비워서 보내면 예전처럼 강연 전 주 목요일 23:59:59로 계산합니다. 디스코드 봇처럼
+     * 마감을 보내지 않는 클라이언트가 그대로 동작하도록 남겨 둔 기본값입니다.
+     */
+    public LocalDateTime resolveApplicationDeadline(LocalDateTime requestedDeadline, LocalDate lectureDate, LocalTime lectureTime) {
+        if (requestedDeadline == null) {
+            return calculateApplicationDeadline(lectureDate);
+        }
+
+        if (lectureDate != null && lectureTime != null) {
+            LocalDateTime lectureStart = LocalDateTime.of(lectureDate, lectureTime);
+            if (!requestedDeadline.isBefore(lectureStart)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "신청 마감은 강연 시작 전이어야 합니다."
+                );
+            }
+        }
+
+        return requestedDeadline;
+    }
+
     public void validateApplicationTime(LocalDateTime createdAt, LocalDateTime deadline, LocalDateTime now) {
         LocalDateTime openTime = createdAt.toLocalDate().atTime(16, 20);
         if (!createdAt.isBefore(openTime)) {

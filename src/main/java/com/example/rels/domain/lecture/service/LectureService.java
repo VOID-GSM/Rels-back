@@ -61,7 +61,8 @@ public class LectureService {
 		validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
 		UserEntity creator = requireUser(userId);
 
-		LocalDateTime deadline = timeValidator.calculateApplicationDeadline(request.lectureDate());
+		LocalDateTime deadline = timeValidator.resolveApplicationDeadline(
+				request.applicationDeadline(), request.lectureDate(), request.lectureTime());
 
 		LectureEntity lecture = new LectureEntity(
 				request.title(),
@@ -126,7 +127,8 @@ public class LectureService {
 		LectureEntity lecture = requireLecture(lectureId);
 		validateCreator(lecture, userId, userRole);
 
-		LocalDateTime deadline = timeValidator.calculateApplicationDeadline(request.lectureDate());
+		LocalDateTime deadline = timeValidator.resolveApplicationDeadline(
+				request.applicationDeadline(), request.lectureDate(), request.lectureTime());
 
 		lecture.updateAllDetails(
 				request.title(),
