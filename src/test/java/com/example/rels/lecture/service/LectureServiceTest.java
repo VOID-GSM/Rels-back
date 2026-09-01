@@ -182,6 +182,27 @@ class LectureServiceTest {
 	}
 
 	@Test
+	void createLectureAllowsCapacityAboveThirty() {
+		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+		var request = new LectureCreateRequest("title", "description", null, 31, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, Set.of());
+
+		when(userRepository.findById(1L)).thenReturn(Optional.of(creator));
+		when(timeValidator.calculateApplicationDeadline(request.lectureDate())).thenReturn(LocalDateTime.now().plusDays(1));
+		when(lectureRepository.save(any(LectureEntity.class))).thenAnswer(invocation -> {
+			LectureEntity lecture = invocation.getArgument(0);
+			TestEntityFactory.setId(lecture, 1L);
+			return lecture;
+		});
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 1L)).thenReturn(Optional.empty());
+
+		LectureDetailResponse response = lectureService.createLecture(1L, request);
+
+		assertEquals(31, response.totalCapacity());
+	}
+
+	@Test
 	void updateLectureAllowsAdminToModifyOtherUserLecture() {
 		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
 		LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20, 1L);
