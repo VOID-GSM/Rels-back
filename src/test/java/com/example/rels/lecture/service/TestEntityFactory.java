@@ -1,10 +1,12 @@
-package com.example.rels.lecture.entity;
+package com.example.rels.lecture.service;
 
-import com.example.rels.domain.user.entity.Role;
+import com.example.rels.domain.user.entity.Role; // 올바른 Role 패키지로 수정
 import com.example.rels.domain.lecture.entity.ApprovalStatus;
+import com.example.rels.domain.lecture.entity.AttendanceStatus;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
 import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
 import com.example.rels.domain.lecture.entity.LectureEntity;
+import com.example.rels.domain.lecture.entity.LectureStatus;
 import com.example.rels.domain.user.entity.UserEntity;
 
 import java.lang.reflect.Field;
@@ -27,7 +29,14 @@ public class TestEntityFactory {
         LectureEntity lecture = new LectureEntity(title, description, creator, location, lectureDate, lectureTime, deadline, totalCapacity);
         setField(lecture, "id", id);
         setField(lecture, "createdAt", LocalDateTime.now().minusDays(2));
-        setApprovalStatus(lecture, ApprovalStatus.APPROVED);
+        setField(lecture, "approvalStatus", ApprovalStatus.APPROVED);
+        
+        // 강의 날짜가 과거이면 상태를 CLOSE로 설정
+        if (lectureDate != null && lectureDate.isBefore(LocalDate.now())) {
+            lecture.close();
+        } else {
+            setField(lecture, "status", LectureStatus.OPEN);
+        }
         return lecture;
     }
 
@@ -42,6 +51,7 @@ public class TestEntityFactory {
         LectureEnrollmentEntity enrollment = new LectureEnrollmentEntity(lecture, user, status);
         setField(enrollment, "id", id);
         setField(enrollment, "requestedAt", LocalDateTime.now().minusDays(1).plusMinutes(id != null ? id : 0));
+        setField(enrollment, "attendanceStatus", AttendanceStatus.NONE);
         return enrollment;
     }
 
@@ -58,14 +68,6 @@ public class TestEntityFactory {
             } catch (IllegalAccessException e) {
                 throw new IllegalStateException(fieldName + " 필드 설정 오류", e);
             }
-        }
-    }
-
-    private static void setApprovalStatus(LectureEntity lecture, ApprovalStatus status) {
-        try {
-            setField(lecture, "approvalStatus", status);
-        } catch (Exception e) {
-            lecture.updateApprovalStatus(status, null);
         }
     }
 }

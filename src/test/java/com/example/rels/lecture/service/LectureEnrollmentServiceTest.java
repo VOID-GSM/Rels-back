@@ -12,7 +12,6 @@ import com.example.rels.domain.lecture.repository.LectureEnrollmentRepository;
 import com.example.rels.domain.lecture.repository.LectureRepository;
 import com.example.rels.domain.user.entity.UserEntity;
 import com.example.rels.domain.user.repository.UserRepository;
-import com.example.rels.lecture.entity.TestEntityFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -49,13 +48,13 @@ class LectureEnrollmentServiceTest {
     @Mock
     private LectureTimeValidator timeValidator;
 
-    @Mock
     private LectureLifecycleHandler lifecycleHandler;
 
     private LectureService lectureService;
 
     @BeforeEach
     void setUp() {
+        lifecycleHandler = new LectureLifecycleHandler(lectureEnrollmentRepository);
         lectureService = new LectureService(
                 lectureRepository,
                 lectureEnrollmentRepository,
@@ -71,7 +70,8 @@ class LectureEnrollmentServiceTest {
 
     @Test
     void enrollRejectsEndedLecture() {
-        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", LocalDate.now().minusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null, 1L);
+        UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().minusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), null, 1L);
 
         when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
         doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "강의가 종료되었습니다."))
@@ -84,7 +84,8 @@ class LectureEnrollmentServiceTest {
     @Test
     @DisplayName("수강 신청 오픈 시간 전 신청 시 예외가 발생한다")
     void enrollRejectsBeforeOpenTime() {
-        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", LocalDate.now().plusDays(2), LocalTime.NOON, LocalDateTime.now().plusDays(2), 30, 1L);
+        UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(2), LocalTime.NOON, LocalDateTime.now().plusDays(2), 30, 1L);
 
         when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
         doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "오후 4시 20분부터 가능합니다."))
@@ -98,7 +99,8 @@ class LectureEnrollmentServiceTest {
 
     @Test
     void enrollConfirmsLectureAtThreshold() {
-        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 30, 1L);
+        UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 30, 1L);
         UserEntity applicant = TestEntityFactory.createUser("user@test.com", "user", "1000000001", Role.USER, 2L);
 
         when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
@@ -121,7 +123,8 @@ class LectureEnrollmentServiceTest {
 
     @Test
     void enrollMovesToWaitingAfterCapacity() {
-        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 30, 1L);
+        UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 30, 1L);
         UserEntity applicant = TestEntityFactory.createUser("user@test.com", "user", "1000000001", Role.USER, 2L);
 
         when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
@@ -161,7 +164,8 @@ class LectureEnrollmentServiceTest {
 
     @Test
     void cancelPromotesFirstWaitingUser() {
-        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", new UserEntity("creator@test.com", "creator", "1000000000", Role.USER), "장소", LocalDate.now(), LocalTime.NOON, LocalDateTime.now().plusDays(1), 30, 1L);
+        UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now(), LocalTime.NOON, LocalDateTime.now().plusDays(1), 30, 1L);
         UserEntity applicant = TestEntityFactory.createUser("user@test.com", "user", "1000000001", Role.USER, 2L);
         UserEntity waitingUser = TestEntityFactory.createUser("wait@test.com", "wait", "1000000002", Role.USER, 3L);
 

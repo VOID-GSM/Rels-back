@@ -12,11 +12,11 @@ import com.example.rels.domain.lecture.entity.ApprovalStatus;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
 import com.example.rels.domain.lecture.entity.LectureEntity;
 import com.example.rels.domain.lecture.entity.LectureStatus;
+import com.example.rels.domain.lecture.repository.LectureEnrollmentCountProjection;
 import com.example.rels.domain.lecture.repository.LectureEnrollmentRepository;
 import com.example.rels.domain.lecture.repository.LectureRepository;
 import com.example.rels.domain.user.entity.UserEntity;
 import com.example.rels.domain.user.repository.UserRepository;
-import com.example.rels.lecture.entity.TestEntityFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +39,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -84,10 +85,30 @@ class LectureServiceTest {
 		when(lectureRepository.findAllByApprovalStatusOrCreatorIdOrderByCreatedAtDesc(eq(ApprovalStatus.APPROVED), eq(2L), any()))
 				.thenReturn(new PageImpl<>(List.of(firstLecture, secondLecture), pageable, 2));
 
-		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.ENROLLED)).thenReturn(3L);
-		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.WAITING)).thenReturn(1L);
-		when(lectureEnrollmentRepository.countByLectureIdAndStatus(12L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
-		when(lectureEnrollmentRepository.countByLectureIdAndStatus(12L, EnrollmentStatus.WAITING)).thenReturn(0L);
+		LectureEnrollmentCountProjection projection1_enrolled = mock(LectureEnrollmentCountProjection.class);
+		when(projection1_enrolled.getLectureId()).thenReturn(11L);
+		when(projection1_enrolled.getStatus()).thenReturn(EnrollmentStatus.ENROLLED);
+		when(projection1_enrolled.getEnrollmentCount()).thenReturn(3L);
+
+		LectureEnrollmentCountProjection projection1_waiting = mock(LectureEnrollmentCountProjection.class);
+		when(projection1_waiting.getLectureId()).thenReturn(11L);
+		when(projection1_waiting.getStatus()).thenReturn(EnrollmentStatus.WAITING);
+		when(projection1_waiting.getEnrollmentCount()).thenReturn(1L);
+
+		LectureEnrollmentCountProjection projection2_enrolled = mock(LectureEnrollmentCountProjection.class);
+		when(projection2_enrolled.getLectureId()).thenReturn(12L);
+		when(projection2_enrolled.getStatus()).thenReturn(EnrollmentStatus.ENROLLED);
+		when(projection2_enrolled.getEnrollmentCount()).thenReturn(0L);
+
+		LectureEnrollmentCountProjection projection2_waiting = mock(LectureEnrollmentCountProjection.class);
+		when(projection2_waiting.getLectureId()).thenReturn(12L);
+		when(projection2_waiting.getStatus()).thenReturn(EnrollmentStatus.WAITING);
+		when(projection2_waiting.getEnrollmentCount()).thenReturn(0L);
+
+		when(lectureEnrollmentRepository.countEnrollmentsByLectureIds(List.of(11L, 12L)))
+				.thenReturn(List.of(projection1_enrolled, projection1_waiting, projection2_enrolled, projection2_waiting));
+
+		doNothing().when(lifecycleHandler).refreshLectureLifecycle(any(LectureEntity.class), any(LocalDateTime.class), anyLong());
 
 		Page<LectureSummaryResponse> lectures = lectureService.getLectures(pageable, 2L);
 
@@ -110,8 +131,20 @@ class LectureServiceTest {
 		when(lectureRepository.findAllByApprovalStatusOrCreatorIdOrderByCreatedAtDesc(eq(ApprovalStatus.APPROVED), eq(2L), any()))
 				.thenReturn(new PageImpl<>(List.of(endedLecture), pageable, 1));
 
-		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
-		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.WAITING)).thenReturn(0L);
+		LectureEnrollmentCountProjection projection_enrolled = mock(LectureEnrollmentCountProjection.class);
+		when(projection_enrolled.getLectureId()).thenReturn(11L);
+		when(projection_enrolled.getStatus()).thenReturn(EnrollmentStatus.ENROLLED);
+		when(projection_enrolled.getEnrollmentCount()).thenReturn(0L);
+
+		LectureEnrollmentCountProjection projection_waiting = mock(LectureEnrollmentCountProjection.class);
+		when(projection_waiting.getLectureId()).thenReturn(11L);
+		when(projection_waiting.getStatus()).thenReturn(EnrollmentStatus.WAITING);
+		when(projection_waiting.getEnrollmentCount()).thenReturn(0L);
+
+		when(lectureEnrollmentRepository.countEnrollmentsByLectureIds(List.of(11L)))
+				.thenReturn(List.of(projection_enrolled, projection_waiting));
+
+		doNothing().when(lifecycleHandler).refreshLectureLifecycle(any(LectureEntity.class), any(LocalDateTime.class), anyLong());
 
 		Page<LectureSummaryResponse> lectures = lectureService.getLectures(pageable, 2L);
 
@@ -127,6 +160,8 @@ class LectureServiceTest {
 		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
 		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.WAITING)).thenReturn(0L);
 		when(lectureEnrollmentRepository.findByLectureIdAndUserId(11L, 2L)).thenReturn(Optional.empty());
+
+		doNothing().when(lifecycleHandler).refreshLectureLifecycle(any(LectureEntity.class), any(LocalDateTime.class));
 
 		LectureDetailResponse response = lectureService.getLectureDetail(11L, 2L, Role.USER);
 
