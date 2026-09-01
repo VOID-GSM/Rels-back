@@ -70,4 +70,8 @@ public class TestEntityFactory {
             }
         }
     }
+
+    public static void setId(Object target, Long id) {
+        setField(target, "id", id);
+    }
 }
