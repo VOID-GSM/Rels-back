@@ -311,6 +311,7 @@ public class LectureService {
 				lecture.getLectureTime(),
 				lecture.getApplicationDeadline(),
 				lecture.getCreatedAt(),
+				lecture.getApprovedAt(),
 				lecture.getCapacityByGrade(),
 				lecture.getTotalCapacity()
 		);
@@ -365,6 +366,7 @@ public class LectureService {
 				lecture.getLectureTime(),
 				lecture.getApplicationDeadline(),
 				lecture.getCreatedAt(),
+				lecture.getApprovedAt(),
 				lecture.getCapacityByGrade(),
 				lecture.getTotalCapacity()
 		);

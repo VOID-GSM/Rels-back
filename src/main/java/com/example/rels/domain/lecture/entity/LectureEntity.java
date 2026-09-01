@@ -86,6 +86,9 @@ public class LectureEntity {
 	@Column(name = "rejection_reason")
 	private String rejectionReason;
 
+	@Column(name = "approved_at")
+	private LocalDateTime approvedAt;
+
 	protected LectureEntity() {
 	}
 
@@ -215,9 +218,16 @@ public class LectureEntity {
 		return rejectionReason;
 	}
 
+	public LocalDateTime getApprovedAt() {
+		return approvedAt;
+	}
+
 	public void updateApprovalStatus(ApprovalStatus approvalStatus, String rejectionReason) {
 		this.approvalStatus = approvalStatus;
 		this.rejectionReason = rejectionReason;
+		if (approvalStatus == ApprovalStatus.APPROVED) {
+			this.approvedAt = LocalDateTime.now();
+		}
 	}
 
 	private static LocalDateTime calculateDeadline(LocalDate lectureDate) {
