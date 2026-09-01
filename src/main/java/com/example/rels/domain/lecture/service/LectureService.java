@@ -3,6 +3,7 @@ package com.example.rels.domain.lecture.service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.example.rels.domain.lecture.dto.request.AttendanceUpdateRequest;
@@ -73,6 +74,7 @@ public class LectureService {
 				request.totalCapacity()
 		);
 		lecture.setCapacityByGrade(request.capacityByGrade());
+		lecture.updateSpeakers(resolveSpeakers(request.speakerIds()));
 		lecture = lectureRepository.save(lecture);
 		return toLectureDetail(lecture, userId);
 	}
@@ -81,7 +83,7 @@ public class LectureService {
 	public Page<LectureSummaryResponse> getLectures(Pageable pageable, Long viewerId) {
 		Page<LectureEntity> lectures = viewerId == null
 				? lectureRepository.findAllByApprovalStatusOrderByCreatedAtDesc(ApprovalStatus.APPROVED, pageable)
-				: lectureRepository.findAllByApprovalStatusOrCreatorIdOrderByCreatedAtDesc(ApprovalStatus.APPROVED, viewerId, pageable);
+				: lectureRepository.findVisibleToUser(ApprovalStatus.APPROVED, viewerId, pageable);
 		Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId = getEnrollmentCountsByLectureIds(lectures.getContent());
 
 		return lectures.map(lecture -> toLectureSummary(lecture, enrollmentCountsByLectureId, viewerId));
@@ -136,6 +138,7 @@ public class LectureService {
 				request.lectureTime(),
 				deadline
 		);
+		lecture.updateSpeakers(resolveSpeakers(request.speakerIds()));
 
 		return toLectureDetail(lecture, userId);
 	}
@@ -166,6 +169,9 @@ public class LectureService {
 		}
 
 		UserEntity user = requireUser(userId);
+		if (lecture.isSpeaker(userId)) {
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "연사자는 자신의 강연에 수강 신청할 수 없습니다.");
+		}
 
 		lectureEnrollmentRepository.findByLectureIdAndUserId(lectureId, userId)
 				.ifPresent(existing -> {
@@ -301,6 +307,7 @@ public class LectureService {
 				lecture.getCreator().getId(),
 				lecture.getCreator().getName(),
 				lecture.getCreator().getStudentNumber(),
+				toSpeakerResponses(lecture),
 				lecture.getStatus().name(),
 				lecture.getApprovalStatus().name(),
 				resolveRejectionReason(lecture, viewerId),
@@ -355,6 +362,7 @@ public class LectureService {
 				lecture.getCreator().getId(),
 				lecture.getCreator().getName(),
 				lecture.getCreator().getStudentNumber(),
+				toSpeakerResponses(lecture),
 				lecture.getStatus().name(),
 				lecture.getApprovalStatus().name(),
 				resolveRejectionReason(lecture, userId),
@@ -375,7 +383,7 @@ public class LectureService {
 	private void validateApprovalVisibility(LectureEntity lecture, Long viewerId, Role viewerRole) {
 		if (lecture.getApprovalStatus() == ApprovalStatus.APPROVED) return;
 		if (viewerRole == Role.ADMIN) return;
-		if (isCreator(lecture, viewerId)) return;
+		if (isCreator(lecture, viewerId) || lecture.isSpeaker(viewerId)) return;
 		throw new ResponseStatusException(HttpStatus.FORBIDDEN, "아직 승인되지 않은 강연입니다.");
 	}
 
@@ -386,12 +394,29 @@ public class LectureService {
 
 	private String resolveRejectionReason(LectureEntity lecture, Long viewerId) {
 		if (lecture.getApprovalStatus() != ApprovalStatus.REJECTED) return null;
-		return isCreator(lecture, viewerId) ? lecture.getRejectionReason() : null;
+		return (isCreator(lecture, viewerId) || lecture.isSpeaker(viewerId)) ? lecture.getRejectionReason() : null;
 	}
 
 	private UserEntity requireUser(Long userId) {
 		return userRepository.findById(userId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "사용자를 찾을 수 없습니다."));
+	}
+
+	private Set<UserEntity> resolveSpeakers(Set<Long> speakerIds) {
+		if (speakerIds == null || speakerIds.isEmpty()) {
+			return Set.of();
+		}
+		List<UserEntity> speakers = userRepository.findAllById(speakerIds);
+		if (speakers.size() != speakerIds.size()) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "등록되지 않은 연사자가 포함되어 있습니다.");
+		}
+		return Set.copyOf(speakers);
+	}
+
+	private List<LectureSpeakerResponse> toSpeakerResponses(LectureEntity lecture) {
+		return lecture.getSpeakers().stream()
+				.map(speaker -> new LectureSpeakerResponse(speaker.getId(), speaker.getName(), speaker.getStudentNumber()))
+				.toList();
 	}
 
 	private LectureEntity requireLecture(Long lectureId) {
@@ -474,11 +499,12 @@ public class LectureService {
 				})
 				.toList();
 
-		List<LectureEntity> myLectures = lectureRepository.findAllByCreatorIdOrderByCreatedAtDesc(userId);
+		List<LectureEntity> myLectures = lectureRepository.findAllBySpeakerIdOrderByCreatedAtDesc(userId);
 		List<MyCreatedLectureResponse> createdLectures = myLectures.stream()
 				.map(lecture -> new MyCreatedLectureResponse(
 						lecture.getId(),
 						lecture.getTitle(),
+						isCreator(lecture, userId),
 						lecture.getStatus().name(),
 						lecture.getApprovalStatus().name(),
 						lecture.getRejectionReason(),
