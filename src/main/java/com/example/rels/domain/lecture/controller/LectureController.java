@@ -1,6 +1,7 @@
 package com.example.rels.domain.lecture.controller;
 
 import com.example.rels.domain.lecture.dto.request.AttendanceUpdateRequest;
+import com.example.rels.domain.lecture.dto.request.EnrollmentDecisionRequest;
 import com.example.rels.domain.lecture.dto.request.LectureApprovalRequest;
 import com.example.rels.domain.lecture.dto.request.LectureCreateRequest;
 import com.example.rels.domain.lecture.dto.request.LectureUpdateRequest;
@@ -122,8 +123,21 @@ public class LectureController {
 	}
 
 	@GetMapping("/{lectureId}/enrollments")
-	public EnrollmentListResponse getEnrollments(@PathVariable Long lectureId) {
-		return lectureService.getEnrollments(lectureId);
+	public EnrollmentListResponse getEnrollments(
+			@PathVariable Long lectureId,
+			@AuthenticationPrincipal AuthenticatedUser currentUser) {
+		AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		return lectureService.getEnrollments(lectureId, authenticatedUser.userId(), authenticatedUser.role());
+	}
+
+	@PatchMapping("/{lectureId}/enrollments/{userId}/decision")
+	public EnrollmentResponse decideWaitingEnrollment(
+			@PathVariable Long lectureId,
+			@PathVariable Long userId,
+			@AuthenticationPrincipal AuthenticatedUser currentUser,
+			@Valid @RequestBody EnrollmentDecisionRequest request) {
+		AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		return lectureService.decideWaitingEnrollment(lectureId, userId, authenticatedUser.userId(), authenticatedUser.role(), request);
 	}
 
 	@GetMapping("/enrollments/me")
