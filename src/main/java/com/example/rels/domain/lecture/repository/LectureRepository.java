@@ -23,7 +23,6 @@ public interface LectureRepository extends JpaRepository<LectureEntity, Long> {
 	@EntityGraph(attributePaths = "creator")
 	Page<LectureEntity> findAllByApprovalStatusOrderByCreatedAtDesc(ApprovalStatus approvalStatus, Pageable pageable);
 
-	// 승인된 강연 + 조회한 본인이 개설한 강연(승인 대기/거절 포함)
 	@EntityGraph(attributePaths = "creator")
 	Page<LectureEntity> findAllByApprovalStatusOrCreatorIdOrderByCreatedAtDesc(ApprovalStatus approvalStatus, Long creatorId, Pageable pageable);
 

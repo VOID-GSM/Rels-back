@@ -1,10 +1,8 @@
 package com.example.rels.domain.lecture.service;
 
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.example.rels.domain.lecture.dto.request.AttendanceUpdateRequest;
@@ -42,19 +40,28 @@ public class LectureService {
 	private final LectureRepository lectureRepository;
 	private final LectureEnrollmentRepository lectureEnrollmentRepository;
 	private final UserRepository userRepository;
+	private final LectureTimeValidator timeValidator;
+	private final LectureLifecycleHandler lifecycleHandler;
 
 	public LectureService(LectureRepository lectureRepository,
 						  LectureEnrollmentRepository lectureEnrollmentRepository,
-						  UserRepository userRepository) {
+						  UserRepository userRepository,
+						  LectureTimeValidator timeValidator,
+						  LectureLifecycleHandler lifecycleHandler) {
 		this.lectureRepository = lectureRepository;
 		this.lectureEnrollmentRepository = lectureEnrollmentRepository;
 		this.userRepository = userRepository;
+		this.timeValidator = timeValidator;
+		this.lifecycleHandler = lifecycleHandler;
 	}
 
 	@Transactional
 	public LectureDetailResponse createLecture(Long userId, LectureCreateRequest request) {
 		validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
 		UserEntity creator = requireUser(userId);
+
+		LocalDateTime deadline = timeValidator.calculateApplicationDeadline(request.lectureDate());
+
 		LectureEntity lecture = new LectureEntity(
 				request.title(),
 				request.description(),
@@ -62,7 +69,7 @@ public class LectureService {
 				request.lectureLocation(),
 				request.lectureDate(),
 				request.lectureTime(),
-				request.applicationDeadline(),
+				deadline,
 				request.totalCapacity()
 		);
 		lecture.setCapacityByGrade(request.capacityByGrade());
@@ -117,6 +124,8 @@ public class LectureService {
 		LectureEntity lecture = requireLecture(lectureId);
 		validateCreator(lecture, userId, userRole);
 
+		LocalDateTime deadline = timeValidator.calculateApplicationDeadline(request.lectureDate());
+
 		lecture.updateAllDetails(
 				request.title(),
 				request.description(),
@@ -125,7 +134,7 @@ public class LectureService {
 				request.lectureLocation(),
 				request.lectureDate(),
 				request.lectureTime(),
-				request.applicationDeadline()
+				deadline
 		);
 
 		return toLectureDetail(lecture, userId);
@@ -149,24 +158,13 @@ public class LectureService {
 
 		LocalDateTime now = LocalDateTime.now();
 
-		LocalDateTime createdAt = lecture.getCreatedAt();
-		LocalDateTime openTime = createdAt.toLocalDate().atTime(16, 20);
+		timeValidator.validateApplicationTime(lecture.getCreatedAt(), lecture.getApplicationDeadline(), now);
 
-		if (!createdAt.isBefore(openTime)) {
-			openTime = openTime.plusDays(1);
-		}
-
-		if (now.isBefore(openTime)) {
-			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "수강 신청은 " + openTime.toLocalDate() + " 오후 4시 20분부터 가능합니다.");
-		}
-
-		refreshLectureLifecycle(lecture, now);
+		lifecycleHandler.refreshLectureLifecycle(lecture, now);
 		if (lecture.getStatus() == LectureStatus.CLOSE) {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "이미 종료된 강의입니다.");
 		}
-		if (now.isAfter(lecture.getApplicationDeadline())) {
-			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "신청 마감일이 지났습니다.");
-		}
+
 		UserEntity user = requireUser(userId);
 
 		lectureEnrollmentRepository.findByLectureIdAndUserId(lectureId, userId)
@@ -174,7 +172,7 @@ public class LectureService {
 					throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 신청한 강의입니다.");
 				});
 
-		Integer userGrade = extractGradeFromStudentNumber(user.getStudentNumber());
+		Integer userGrade = lifecycleHandler.extractGradeFromStudentNumber(user.getStudentNumber());
 		Map<Integer, Integer> capacityByGrade = lecture.getCapacityByGrade() == null ? Map.of() : lecture.getCapacityByGrade();
 		Integer totalCapacity = lecture.getTotalCapacity();
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
@@ -183,8 +181,6 @@ public class LectureService {
 		boolean useGradeCapacity = !capacityByGrade.isEmpty();
 		boolean isFull;
 		if (useGradeCapacity) {
-			// 학년을 못 읽거나 배정이 없는 학년은 앉을 자리가 없으므로 대기로 받는다.
-			// 마감 뒤 자리가 남으면 그때 순번대로 올라온다.
 			Integer gradeCapacity = userGrade == null ? null : capacityByGrade.get(userGrade);
 			if (gradeCapacity == null) {
 				isFull = true;
@@ -212,16 +208,6 @@ public class LectureService {
 		return new EnrollmentResponse(lectureId, status.name(), nextEnrolledCount, nextWaitingCount, savedEnrollment.getRequestedAt());
 	}
 
-	/** 학번 "2204"의 맨 앞자리가 학년이다. 두 번째 자리는 반이므로 읽으면 안 된다. */
-	private Integer extractGradeFromStudentNumber(String studentNumber) {
-		if (studentNumber == null || studentNumber.isEmpty()) return null;
-		try {
-			return Integer.parseInt(studentNumber.substring(0, 1));
-		} catch (Exception e) {
-			return null;
-		}
-	}
-
 	@Transactional
 	public EnrollmentResponse cancelEnrollment(Long lectureId, Long userId) {
 		LectureEntity lecture = requireLectureForUpdate(lectureId);
@@ -232,13 +218,24 @@ public class LectureService {
 		lectureEnrollmentRepository.delete(enrollment);
 
 		if (canceledStatus == EnrollmentStatus.ENROLLED) {
-			promoteFirstWaitingUser(lecture, LocalDateTime.now());
+			lifecycleHandler.promoteFirstWaitingUser(lecture, LocalDateTime.now());
 		}
 
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
 
 		return new EnrollmentResponse(lecture.getId(), "CANCELED", enrolledCount, waitingCount, null);
+	}
+
+	@Scheduled(fixedDelayString = "${rels.lecture.lifecycle-sync-delay-ms:60000}")
+	@Transactional
+	public void syncLectureStatuses() {
+		LocalDateTime now = LocalDateTime.now();
+		List<LectureEntity> lectures = lectureRepository.findAll();
+		for (LectureEntity lecture : lectures) {
+			lifecycleHandler.promoteWaitingAfterDeadline(lecture, now);
+			lifecycleHandler.refreshLectureLifecycle(lecture, now);
+		}
 	}
 
 	private void validateLectureCapacityRules(Map<Integer, Integer> capacityByGrade, Integer totalCapacity) {
@@ -256,9 +253,7 @@ public class LectureService {
 		}
 
 		if (capacityByGrade != null && !capacityByGrade.isEmpty()) {
-			int gradeCapacitySum = capacityByGrade.values().stream()
-					.mapToInt(Integer::intValue)
-					.sum();
+			int gradeCapacitySum = capacityByGrade.values().stream().mapToInt(Integer::intValue).sum();
 			if (gradeCapacitySum < MIN_CAPACITY) {
 				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원의 합계는 " + MIN_CAPACITY + "명 이상이어야 합니다.");
 			}
@@ -282,79 +277,11 @@ public class LectureService {
 		}
 	}
 
-	/**
-	 * 자리가 비면 대기자 한 명을 올린다.
-	 *
-	 * 신청을 받는 동안에는 자리가 남은 학년의 대기자만 올라올 수 있다. 맨 앞 대기자를
-	 * 그냥 올리면 1학년이 비운 자리를 2학년이 채워 학년 정원이 넘칠 수 있기 때문이다.
-	 * 마감 뒤에는 학년 정원을 더 보지 않고 전체 정원까지 순번대로 올린다.
-	 */
-	private void promoteFirstWaitingUser(LectureEntity lecture, LocalDateTime now) {
-		Long lectureId = lecture.getId();
-		List<LectureEnrollmentEntity> enrollments = lectureEnrollmentRepository.findAllByLectureId(lectureId);
-
-		List<LectureEnrollmentEntity> enrolled = enrollments.stream()
-				.filter(e -> e.getStatus() == EnrollmentStatus.ENROLLED)
-				.toList();
-
-		int capacity = resolveTotalCapacity(lecture);
-		if (capacity > 0 && enrolled.size() >= capacity) {
-			return;
-		}
-
-		List<LectureEnrollmentEntity> waiting = sortByRequestedOrder(enrollments.stream()
-				.filter(e -> e.getStatus() == EnrollmentStatus.WAITING)
-				.toList());
-		if (waiting.isEmpty()) {
-			return;
-		}
-
-		Map<Integer, Integer> capacityByGrade = lecture.getCapacityByGrade();
-		boolean useGradeCapacity = capacityByGrade != null && !capacityByGrade.isEmpty()
-				&& !isAfterApplicationDeadline(lecture, now);
-
-		if (!useGradeCapacity) {
-			waiting.get(0).promoteToEnrolled();
-			return;
-		}
-
-		for (LectureEnrollmentEntity candidate : waiting) {
-			Integer grade = extractGradeFromStudentNumber(candidate.getUser().getStudentNumber());
-			Integer gradeCapacity = grade == null ? null : capacityByGrade.get(grade);
-			if (gradeCapacity == null) {
-				continue;
-			}
-
-			long taken = enrolled.stream()
-					.filter(e -> grade.equals(extractGradeFromStudentNumber(e.getUser().getStudentNumber())))
-					.count();
-			if (taken < gradeCapacity) {
-				candidate.promoteToEnrolled();
-				return;
-			}
-		}
-	}
-
 	private long countEnrolledInGrade(Long lectureId, Integer grade) {
 		return lectureEnrollmentRepository.findAllByLectureId(lectureId).stream()
 				.filter(e -> e.getStatus() == EnrollmentStatus.ENROLLED)
-				.filter(e -> grade.equals(extractGradeFromStudentNumber(e.getUser().getStudentNumber())))
+				.filter(e -> grade.equals(lifecycleHandler.extractGradeFromStudentNumber(e.getUser().getStudentNumber())))
 				.count();
-	}
-
-	/** 신청 순서. 신청 시각이 같으면 먼저 저장된 쪽이 앞선다. */
-	private List<LectureEnrollmentEntity> sortByRequestedOrder(List<LectureEnrollmentEntity> enrollments) {
-		return enrollments.stream()
-				.sorted(Comparator
-						.comparing(LectureEnrollmentEntity::getRequestedAt,
-								Comparator.nullsLast(Comparator.naturalOrder()))
-						.thenComparing(LectureEnrollmentEntity::getId,
-								Comparator.nullsLast(Comparator.naturalOrder())))
-				.toList();
-	}
-
-	private boolean isAfterApplicationDeadline(LectureEntity lecture, LocalDateTime now) {
-		return lecture.getApplicationDeadline() != null && now.isAfter(lecture.getApplicationDeadline());
 	}
 
 	private LectureSummaryResponse toLectureSummary(LectureEntity lecture,
@@ -364,7 +291,7 @@ public class LectureService {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
 		}
 		long enrolledCount = getEnrollmentCount(enrollmentCountsByLectureId, lecture.getId(), EnrollmentStatus.ENROLLED);
-		refreshLectureLifecycle(lecture, LocalDateTime.now(), enrolledCount);
+		lifecycleHandler.refreshLectureLifecycle(lecture, LocalDateTime.now(), enrolledCount);
 		long waitingCount = getEnrollmentCount(enrollmentCountsByLectureId, lecture.getId(), EnrollmentStatus.WAITING);
 
 		return new LectureSummaryResponse(
@@ -390,13 +317,9 @@ public class LectureService {
 	}
 
 	private Map<Long, Map<EnrollmentStatus, Long>> getEnrollmentCountsByLectureIds(List<LectureEntity> lectures) {
-		if (lectures.isEmpty()) {
-			return Map.of();
-		}
+		if (lectures.isEmpty()) return Map.of();
 
-		List<Long> lectureIds = lectures.stream()
-				.map(LectureEntity::getId)
-				.toList();
+		List<Long> lectureIds = lectures.stream().map(LectureEntity::getId).toList();
 
 		return lectureEnrollmentRepository.countEnrollmentsByLectureIds(lectureIds).stream()
 				.collect(Collectors.groupingBy(
@@ -416,7 +339,7 @@ public class LectureService {
 		if (lecture.getCreator() == null) {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
 		}
-		refreshLectureLifecycle(lecture, LocalDateTime.now());
+		lifecycleHandler.refreshLectureLifecycle(lecture, LocalDateTime.now());
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.ENROLLED);
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.WAITING);
 
@@ -448,15 +371,9 @@ public class LectureService {
 	}
 
 	private void validateApprovalVisibility(LectureEntity lecture, Long viewerId, Role viewerRole) {
-		if (lecture.getApprovalStatus() == ApprovalStatus.APPROVED) {
-			return;
-		}
-		if (viewerRole == Role.ADMIN) {
-			return;
-		}
-		if (isCreator(lecture, viewerId)) {
-			return;
-		}
+		if (lecture.getApprovalStatus() == ApprovalStatus.APPROVED) return;
+		if (viewerRole == Role.ADMIN) return;
+		if (isCreator(lecture, viewerId)) return;
 		throw new ResponseStatusException(HttpStatus.FORBIDDEN, "아직 승인되지 않은 강연입니다.");
 	}
 
@@ -466,9 +383,7 @@ public class LectureService {
 	}
 
 	private String resolveRejectionReason(LectureEntity lecture, Long viewerId) {
-		if (lecture.getApprovalStatus() != ApprovalStatus.REJECTED) {
-			return null;
-		}
+		if (lecture.getApprovalStatus() != ApprovalStatus.REJECTED) return null;
 		return isCreator(lecture, viewerId) ? lecture.getRejectionReason() : null;
 	}
 
@@ -489,21 +404,11 @@ public class LectureService {
 
 	private void validateCreator(LectureEntity lecture, Long userId, Role userRole) {
 		if (lecture.getCreator() == null) {
-			throw new ResponseStatusException(
-					HttpStatus.INTERNAL_SERVER_ERROR,
-					"강의 생성자 정보가 없습니다."
-			);
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
 		}
-
-		if (userRole == Role.ADMIN) {
-			return;
-		}
-
+		if (userRole == Role.ADMIN) return;
 		if (!lecture.getCreator().getId().equals(userId)) {
-			throw new ResponseStatusException(
-					HttpStatus.FORBIDDEN,
-					"강의 작성자만 수정 또는 삭제할 수 있습니다."
-			);
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "강의 작성자만 수정 또는 삭제할 수 있습니다.");
 		}
 	}
 
@@ -513,117 +418,9 @@ public class LectureService {
 		}
 	}
 
-	@Scheduled(fixedDelayString = "${rels.lecture.lifecycle-sync-delay-ms:60000}")
-	@Transactional
-	public void syncLectureStatuses() {
-		syncLectureStatuses(LocalDateTime.now());
-	}
-
-	private void syncLectureStatuses(LocalDateTime now) {
-		List<LectureEntity> lectures = lectureRepository.findAll();
-		for (LectureEntity lecture : lectures) {
-			promoteWaitingAfterDeadline(lecture, now);
-			refreshLectureLifecycle(lecture, now);
-		}
-	}
-
-	/**
-	 * 신청 마감이 지나면 비어 있는 자리를 대기자로 채운다.
-	 * 학년별 정원은 신청을 받는 동안만 적용하고, 마감 뒤에는 전체 정원까지 신청 순서대로 올린다.
-	 */
-	private void promoteWaitingAfterDeadline(LectureEntity lecture, LocalDateTime now) {
-		if (lecture.getId() == null || lecture.getStatus() == LectureStatus.CLOSE) {
-			return;
-		}
-
-		if (!isAfterApplicationDeadline(lecture, now)) {
-			return;
-		}
-
-		int capacity = resolveTotalCapacity(lecture);
-		if (capacity <= 0) {
-			return;
-		}
-
-		List<LectureEnrollmentEntity> enrollments = lectureEnrollmentRepository.findAllByLectureId(lecture.getId());
-		long enrolledCount = enrollments.stream()
-				.filter(e -> e.getStatus() == EnrollmentStatus.ENROLLED)
-				.count();
-		if (enrolledCount >= capacity) {
-			return;
-		}
-
-		List<LectureEnrollmentEntity> waiting = sortByRequestedOrder(enrollments.stream()
-				.filter(e -> e.getStatus() == EnrollmentStatus.WAITING)
-				.toList());
-
-		for (LectureEnrollmentEntity enrollment : waiting) {
-			if (enrolledCount >= capacity) {
-				break;
-			}
-			enrollment.promoteToEnrolled();
-			enrolledCount++;
-		}
-	}
-
-	/** 전체 정원. 학년별로 나눈 강연은 학년 정원의 합이 전체 정원이 된다. */
-	private int resolveTotalCapacity(LectureEntity lecture) {
-		if (lecture.getTotalCapacity() != null) {
-			return lecture.getTotalCapacity();
-		}
-
-		Map<Integer, Integer> capacityByGrade = lecture.getCapacityByGrade();
-		if (capacityByGrade == null || capacityByGrade.isEmpty()) {
-			return 0;
-		}
-
-		return capacityByGrade.values().stream()
-				.filter(Objects::nonNull)
-				.mapToInt(Integer::intValue)
-				.sum();
-	}
-
-	private void refreshLectureLifecycle(LectureEntity lecture, LocalDateTime now) {
-		if (lecture.getId() == null) {
-			LocalDateTime lectureEndDateTime = lecture.getLectureEndDateTime();
-			if (lecture.getStatus() != LectureStatus.CLOSE && lectureEndDateTime != null && now.isAfter(lectureEndDateTime)) {
-				lecture.close();
-			}
-			return;
-		}
-
-		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.ENROLLED);
-		refreshLectureLifecycle(lecture, now, enrolledCount);
-	}
-
-	private void refreshLectureLifecycle(LectureEntity lecture, LocalDateTime now, long enrolledCount) {
-		if (lecture.getStatus() == LectureStatus.CLOSE) {
-			return;
-		}
-
-		LocalDateTime lectureEndDateTime = lecture.getLectureEndDateTime();
-		if (lectureEndDateTime != null && now.isAfter(lectureEndDateTime)) {
-			lecture.close();
-			return;
-		}
-
-		if (lecture.getStatus() != LectureStatus.OPEN) {
-			return;
-		}
-
-		if (lecture.getApplicationDeadline() != null && now.isAfter(lecture.getApplicationDeadline())) {
-			if (enrolledCount >= CONFIRM_THRESHOLD) {
-				lecture.confirm();
-				return;
-			}
-			lecture.setStatus(LectureStatus.UNCONFIRMED);
-		}
-	}
-
 	@Transactional(readOnly = true)
 	public EnrollmentListResponse getEnrollments(Long lectureId) {
 		requireLecture(lectureId);
-
 		List<LectureEnrollmentEntity> allEnrollments = lectureEnrollmentRepository.findAllByLectureId(lectureId);
 
 		List<EnrollmentUserResponse> enrolled = allEnrollments.stream()
@@ -729,9 +526,7 @@ public class LectureService {
 	}
 
 	private void validateCreatorOrAdmin(LectureEntity lecture, Long userId, Role userRole) {
-		if (userRole == Role.ADMIN) {
-			return;
-		}
+		if (userRole == Role.ADMIN) return;
 		if (lecture.getCreator() == null || !lecture.getCreator().getId().equals(userId)) {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "강의 작성자 또는 관리자만 접근 가능합니다.");
 		}
