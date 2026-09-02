@@ -59,9 +59,9 @@ public class LectureService {
 	@Transactional
 	public LectureDetailResponse createLecture(Long userId, LectureCreateRequest request) {
 		validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
-		UserEntity creator = requireUser(userId);
+		timeValidator.validateApplicationDeadline(request.lectureDate(), request.lectureTime(), request.applicationDeadline());
 
-		LocalDateTime deadline = timeValidator.calculateApplicationDeadline(request.lectureDate());
+		UserEntity creator = requireUser(userId);
 
 		LectureEntity lecture = new LectureEntity(
 				request.title(),
@@ -70,7 +70,7 @@ public class LectureService {
 				request.lectureLocation(),
 				request.lectureDate(),
 				request.lectureTime(),
-				deadline,
+				request.applicationDeadline(),
 				request.totalCapacity()
 		);
 		lecture.setCapacityByGrade(request.capacityByGrade());
@@ -122,11 +122,10 @@ public class LectureService {
 	@Transactional
 	public LectureDetailResponse updateLecture(Long lectureId, Long userId, Role userRole, LectureUpdateRequest request) {
 		validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
+		timeValidator.validateApplicationDeadline(request.lectureDate(), request.lectureTime(), request.applicationDeadline());
 
 		LectureEntity lecture = requireLecture(lectureId);
 		validateCreator(lecture, userId, userRole);
-
-		LocalDateTime deadline = timeValidator.calculateApplicationDeadline(request.lectureDate());
 
 		lecture.updateAllDetails(
 				request.title(),
@@ -136,7 +135,7 @@ public class LectureService {
 				request.lectureLocation(),
 				request.lectureDate(),
 				request.lectureTime(),
-				deadline
+				request.applicationDeadline()
 		);
 		lecture.updateSpeakers(resolveSpeakers(request.speakerIds()));
 
@@ -462,7 +461,7 @@ public class LectureService {
 
 	@Transactional
 	public EnrollmentResponse decideWaitingEnrollment(Long lectureId, Long enrollmentUserId, Long currentUserId,
-			Role currentUserRole, EnrollmentDecisionRequest request) {
+													  Role currentUserRole, EnrollmentDecisionRequest request) {
 		LectureEntity lecture = requireLecture(lectureId);
 		validateCreatorOrAdmin(lecture, currentUserId, currentUserRole);
 		LectureEnrollmentEntity enrollment = lectureEnrollmentRepository.findByLectureIdAndUserId(lectureId, enrollmentUserId)
