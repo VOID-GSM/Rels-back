@@ -35,8 +35,5 @@ public class LectureTimeValidator {
             );
         }
 
-        if (deadline != null && now.isAfter(deadline)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "신청 마감 시간이 지났습니다 (전주 목요일 23:59 마감).");
-        }
     }
 }

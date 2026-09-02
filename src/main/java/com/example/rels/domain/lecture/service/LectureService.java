@@ -7,6 +7,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.example.rels.domain.lecture.dto.request.AttendanceUpdateRequest;
+import com.example.rels.domain.lecture.dto.request.EnrollmentDecisionRequest;
 import com.example.rels.domain.lecture.dto.request.LectureApprovalRequest;
 import com.example.rels.domain.lecture.dto.request.LectureCreateRequest;
 import com.example.rels.domain.lecture.dto.request.LectureUpdateRequest;
@@ -36,7 +37,6 @@ public class LectureService {
 
 	private static final long CONFIRM_THRESHOLD = 10;
 	private static final int MIN_CAPACITY = 10;
-	private static final int MAX_CAPACITY = 30;
 
 	private final LectureRepository lectureRepository;
 	private final LectureEnrollmentRepository lectureEnrollmentRepository;
@@ -190,7 +190,9 @@ public class LectureService {
 
 		boolean useGradeCapacity = !capacityByGrade.isEmpty();
 		boolean isFull;
-		if (useGradeCapacity) {
+		if (isAfterApplicationDeadline) {
+			isFull = true;
+		} else if (useGradeCapacity) {
 			Integer gradeCapacity = userGrade == null ? null : capacityByGrade.get(userGrade);
 			if (gradeCapacity == null) {
 				isFull = true;
@@ -227,10 +229,6 @@ public class LectureService {
 		EnrollmentStatus canceledStatus = enrollment.getStatus();
 		lectureEnrollmentRepository.delete(enrollment);
 
-		if (canceledStatus == EnrollmentStatus.ENROLLED) {
-			lifecycleHandler.promoteFirstWaitingUser(lecture, LocalDateTime.now());
-		}
-
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
 
@@ -243,7 +241,6 @@ public class LectureService {
 		LocalDateTime now = LocalDateTime.now();
 		List<LectureEntity> lectures = lectureRepository.findAll();
 		for (LectureEntity lecture : lectures) {
-			lifecycleHandler.promoteWaitingAfterDeadline(lecture, now);
 			lifecycleHandler.refreshLectureLifecycle(lecture, now);
 		}
 	}
@@ -257,9 +254,6 @@ public class LectureService {
 			if (totalCapacity < MIN_CAPACITY) {
 				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "전체 정원은 " + MIN_CAPACITY + "명 이상이어야 합니다.");
 			}
-			if (totalCapacity > MAX_CAPACITY) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "전체 정원은 최대 " + MAX_CAPACITY + "명까지 설정할 수 있습니다.");
-			}
 		}
 
 		if (capacityByGrade != null && !capacityByGrade.isEmpty()) {
@@ -267,10 +261,6 @@ public class LectureService {
 			if (gradeCapacitySum < MIN_CAPACITY) {
 				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원의 합계는 " + MIN_CAPACITY + "명 이상이어야 합니다.");
 			}
-			if (gradeCapacitySum > MAX_CAPACITY) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원의 합계는 최대 " + MAX_CAPACITY + "명까지 설정할 수 있습니다.");
-			}
-
 			for (Map.Entry<Integer, Integer> e : capacityByGrade.entrySet()) {
 				Integer grade = e.getKey();
 				Integer cap = e.getValue();
@@ -279,9 +269,6 @@ public class LectureService {
 				}
 				if (cap < 0) {
 					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원은 0 이상이어야 합니다. (학년: " + grade + ")");
-				}
-				if (cap > MAX_CAPACITY) {
-					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "한 학년의 정원은 최대 " + MAX_CAPACITY + "명까지 설정할 수 있습니다. (학년: " + grade + ")");
 				}
 			}
 		}
@@ -450,8 +437,9 @@ public class LectureService {
 	}
 
 	@Transactional(readOnly = true)
-	public EnrollmentListResponse getEnrollments(Long lectureId) {
-		requireLecture(lectureId);
+	public EnrollmentListResponse getEnrollments(Long lectureId, Long currentUserId, Role currentUserRole) {
+		LectureEntity lecture = requireLecture(lectureId);
+		validateCreatorOrAdmin(lecture, currentUserId, currentUserRole);
 		List<LectureEnrollmentEntity> allEnrollments = lectureEnrollmentRepository.findAllByLectureId(lectureId);
 
 		List<EnrollmentUserResponse> enrolled = allEnrollments.stream()
@@ -464,7 +452,34 @@ public class LectureService {
 				.map(this::toEnrollmentUserResponse)
 				.toList();
 
-		return new EnrollmentListResponse(enrolled, waiting);
+		List<EnrollmentUserResponse> rejected = allEnrollments.stream()
+				.filter(e -> e.getStatus() == EnrollmentStatus.REJECTED)
+				.map(this::toEnrollmentUserResponse)
+				.toList();
+
+		return new EnrollmentListResponse(enrolled, waiting, rejected);
+	}
+
+	@Transactional
+	public EnrollmentResponse decideWaitingEnrollment(Long lectureId, Long enrollmentUserId, Long currentUserId,
+			Role currentUserRole, EnrollmentDecisionRequest request) {
+		LectureEntity lecture = requireLecture(lectureId);
+		validateCreatorOrAdmin(lecture, currentUserId, currentUserRole);
+		LectureEnrollmentEntity enrollment = lectureEnrollmentRepository.findByLectureIdAndUserId(lectureId, enrollmentUserId)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "대기 신청 내역이 없습니다."));
+		if (enrollment.getStatus() != EnrollmentStatus.WAITING) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "대기 상태의 신청만 수락 또는 거절할 수 있습니다.");
+		}
+
+		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
+		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
+		if (request.approved()) {
+			enrollment.promoteToEnrolled();
+			return new EnrollmentResponse(lectureId, EnrollmentStatus.ENROLLED.name(), enrolledCount + 1, waitingCount - 1, enrollment.getRequestedAt());
+		}
+
+		enrollment.reject();
+		return new EnrollmentResponse(lectureId, EnrollmentStatus.REJECTED.name(), enrolledCount, waitingCount - 1, enrollment.getRequestedAt());
 	}
 
 	private EnrollmentUserResponse toEnrollmentUserResponse(LectureEnrollmentEntity enrollment) {
