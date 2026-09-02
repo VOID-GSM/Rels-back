@@ -22,9 +22,9 @@ public class LectureTimeValidator {
         return LocalDateTime.of(previousThursday, LocalTime.of(23, 59, 59));
     }
 
-    public void validateApplicationTime(LocalDateTime createdAt, LocalDateTime deadline, LocalDateTime now) {
-        LocalDateTime openTime = createdAt.toLocalDate().atTime(16, 20);
-        if (!createdAt.isBefore(openTime)) {
+    public void validateApplicationTime(LocalDateTime approvalTime, LocalDateTime deadline, LocalDateTime now) {
+        LocalDateTime openTime = approvalTime.toLocalDate().atTime(16, 20);
+        if (approvalTime.isAfter(openTime)) {
             openTime = openTime.plusDays(1);
         }
 
