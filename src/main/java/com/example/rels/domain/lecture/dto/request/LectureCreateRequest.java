@@ -1,11 +1,13 @@
 package com.example.rels.domain.lecture.dto.request;
 
+import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Map;
 import java.util.Set;
@@ -18,6 +20,7 @@ public record LectureCreateRequest(
 		@NotBlank @Size(max = 255) String lectureLocation,
 		@NotNull LocalDate lectureDate,
 		@NotNull LocalTime lectureTime,
+		@NotNull @Future(message = "신청 마감 시각은 현재보다 미래여야 합니다.") LocalDateTime applicationDeadline,
 		Set<@NotNull Long> speakerIds
 ) {
 }

@@ -1,10 +1,8 @@
 package com.example.rels.domain.lecture.entity;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.temporal.TemporalAdjusters;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -112,12 +110,8 @@ public class LectureEntity {
 		this.lectureLocation = lectureLocation;
 		this.lectureDate = lectureDate;
 		this.lectureTime = lectureTime;
-		this.applicationDeadline = applicationDeadline != null ? applicationDeadline : calculateDeadline(lectureDate);
+		this.applicationDeadline = applicationDeadline;
 		this.totalCapacity = totalCapacity;
-	}
-
-	public LectureEntity(String title, String description, UserEntity creator, String lectureLocation, LocalDate lectureDate, LocalTime lectureTime, Integer totalCapacity) {
-		this(title, description, creator, lectureLocation, lectureDate, lectureTime, calculateDeadline(lectureDate), totalCapacity);
 	}
 
 	public LectureEntity(String title, String description, UserEntity creator) {
@@ -226,11 +220,7 @@ public class LectureEntity {
 		this.lectureLocation = lectureLocation;
 		this.lectureDate = lectureDate;
 		this.lectureTime = lectureTime;
-		this.applicationDeadline = applicationDeadline != null ? applicationDeadline : calculateDeadline(lectureDate);
-	}
-
-	public void updateAllDetails(String title, String description, Map<Integer, Integer> capacityByGrade, Integer totalCapacity, String lectureLocation, LocalDate lectureDate, LocalTime lectureTime) {
-		updateAllDetails(title, description, capacityByGrade, totalCapacity, lectureLocation, lectureDate, lectureTime, calculateDeadline(lectureDate));
+		this.applicationDeadline = applicationDeadline;
 	}
 
 	public void setStatus(LectureStatus status) {
@@ -255,14 +245,5 @@ public class LectureEntity {
 		if (approvalStatus == ApprovalStatus.APPROVED) {
 			this.approvedAt = LocalDateTime.now();
 		}
-	}
-
-	private static LocalDateTime calculateDeadline(LocalDate lectureDate) {
-		if (lectureDate == null) {
-			return null;
-		}
-		LocalDate startOfWeek = lectureDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-		LocalDate previousThursday = startOfWeek.minusDays(4);
-		return LocalDateTime.of(previousThursday, LocalTime.of(23, 59, 59));
 	}
 }
