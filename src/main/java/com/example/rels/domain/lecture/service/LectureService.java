@@ -161,7 +161,11 @@ public class LectureService {
 
 		LocalDateTime now = LocalDateTime.now();
 
-		timeValidator.validateApplicationTime(lecture.getCreatedAt(), lecture.getApplicationDeadline(), now);
+		LocalDateTime applicationOpenReference = lecture.getApprovedAt() != null
+				? lecture.getApprovedAt() : lecture.getCreatedAt();
+		timeValidator.validateApplicationTime(applicationOpenReference, lecture.getApplicationDeadline(), now);
+		boolean isAfterApplicationDeadline = lecture.getApplicationDeadline() != null
+				&& now.isAfter(lecture.getApplicationDeadline());
 
 		lifecycleHandler.refreshLectureLifecycle(lecture, now);
 		if (lecture.getStatus() == LectureStatus.CLOSE) {
