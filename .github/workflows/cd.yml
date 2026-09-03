@@ -39,15 +39,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to server via SSH
-        uses: appleboy/ssh-action@v1
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Cloudtype
+        uses: cloudtype-github-actions/deploy@v1
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          password: ${{ secrets.SERVER_PASSWORD }}
-          port: 21107
-          script: |
-            cd ${{ secrets.SERVER_DEPLOY_PATH }}
-            git pull origin main
-            docker compose up --build -d
-            docker image prune -f
+          token: ${{ secrets.CLOUDTYPE_TOKEN }}
+          project: rels
+          stage: main
+          yaml: |
+            name: rels
+            app: java@21
+            port: 8080
+            build: ./gradlew bootJar
