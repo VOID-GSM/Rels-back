@@ -329,4 +329,39 @@ class LectureEnrollmentServiceTest {
         assertEquals(1, asCreator.rejected().size());
         assertEquals(4L, asCreator.rejected().get(0).userId());
     }
+
+    @Test
+    void cancelRejectsConfirmedEnrollmentAfterDeadline() {
+        UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().minusHours(1), 30, 1L);
+        UserEntity applicant = TestEntityFactory.createUser("user@test.com", "user", "1000000001", Role.USER, 2L);
+        LectureEnrollmentEntity enrolled = TestEntityFactory.createEnrollment(lecture, applicant, EnrollmentStatus.ENROLLED, 1L);
+
+        when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+        when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(enrolled));
+
+        var exception = assertThrows(ResponseStatusException.class,
+                () -> lectureService.cancelEnrollment(1L, 2L));
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        verify(lectureEnrollmentRepository, never()).delete(enrolled);
+    }
+
+    @Test
+    void cancelAllowsWaitingEnrollmentAfterDeadline() {
+        UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().minusHours(1), 30, 1L);
+        UserEntity applicant = TestEntityFactory.createUser("user@test.com", "user", "1000000001", Role.USER, 2L);
+        LectureEnrollmentEntity waiting = TestEntityFactory.createEnrollment(lecture, applicant, EnrollmentStatus.WAITING, 1L);
+
+        when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+        when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(waiting));
+        when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(30L);
+        when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
+
+        EnrollmentResponse response = lectureService.cancelEnrollment(1L, 2L);
+
+        verify(lectureEnrollmentRepository).delete(waiting);
+        assertEquals("CANCELED", response.enrollmentStatus());
+    }
 }
