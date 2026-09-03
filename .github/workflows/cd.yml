@@ -50,6 +50,9 @@ jobs:
           stage: main
           yaml: |
             name: rels
-            app: java@21
+            app: dockerfile
             port: 8080
-            build: ./gradlew bootJar
+            context:
+              git:
+                url: git@github.com:${{ github.repository }}.git
+                ref: main
