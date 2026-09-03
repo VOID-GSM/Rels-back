@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.rels.domain.auth.dto.CurrentUserResponse;
 import com.example.rels.domain.auth.dto.OAuthSignInRequest;
 import com.example.rels.domain.auth.dto.OAuthSignInResponse;
+import com.example.rels.domain.auth.dto.RefreshTokenRequest;
 import com.example.rels.domain.auth.service.AuthService;
 import com.example.rels.domain.auth.service.DgOAuthFlowService;
 import com.example.rels.global.security.AuthenticatedUser;
@@ -45,6 +46,11 @@ public class AuthController {
 	@PostMapping("/signin")
 	public OAuthSignInResponse signIn(@Valid @RequestBody OAuthSignInRequest request) {
 		return authService.signIn(request);
+	}
+
+	@PostMapping("/refresh")
+	public OAuthSignInResponse refresh(@Valid @RequestBody RefreshTokenRequest request) {
+		return authService.refresh(request);
 	}
 
 	@GetMapping("/me")

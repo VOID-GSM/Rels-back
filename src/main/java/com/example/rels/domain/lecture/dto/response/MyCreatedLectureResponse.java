@@ -7,6 +7,7 @@ import java.time.LocalTime;
 public record MyCreatedLectureResponse(
 		Long lectureId,
 		String title,
+		boolean creator,
 		String lectureStatus,
 		String approvalStatus,
 		String rejectionReason,

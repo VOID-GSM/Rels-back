@@ -1,21 +1,21 @@
 package com.example.rels.domain.lecture.entity;
 
-import java.util.HashMap;
-import java.util.Map;
-import jakarta.persistence.ElementCollection;
-import jakarta.persistence.CollectionTable;
-import jakarta.persistence.MapKeyColumn;
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
 
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import com.example.rels.domain.user.entity.UserEntity;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -24,12 +24,16 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.MapKeyColumn;
 import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "lectures")
 public class LectureEntity {
+
 	@ElementCollection
 	@CollectionTable(name = "lecture_capacity_by_grade", joinColumns = @JoinColumn(name = "lecture_id"))
 	@MapKeyColumn(name = "grade")
@@ -50,6 +54,12 @@ public class LectureEntity {
 	@JoinColumn(name = "creator_id", nullable = false)
 	private UserEntity creator;
 
+	@ManyToMany(fetch = FetchType.LAZY)
+	@JoinTable(name = "lecture_speakers",
+			joinColumns = @JoinColumn(name = "lecture_id"),
+			inverseJoinColumns = @JoinColumn(name = "user_id"))
+	private Set<UserEntity> speakers = new LinkedHashSet<>();
+
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
 	private LectureStatus status;
@@ -63,7 +73,7 @@ public class LectureEntity {
 	@Column(name = "lecture_time")
 	private LocalTime lectureTime;
 
-	@Column(name = "application_deadline", nullable = false)
+	@Column(name = "application_deadline")
 	private LocalDateTime applicationDeadline;
 
 	@Column(name = "total_capacity")
@@ -84,6 +94,9 @@ public class LectureEntity {
 	@Column(name = "rejection_reason")
 	private String rejectionReason;
 
+	@Column(name = "approved_at")
+	private LocalDateTime approvedAt;
+
 	protected LectureEntity() {
 	}
 
@@ -91,6 +104,7 @@ public class LectureEntity {
 		this.title = title;
 		this.description = description;
 		this.creator = creator;
+		this.speakers.add(creator);
 		this.status = LectureStatus.OPEN;
 		this.capacityByGrade = new HashMap<>();
 		this.lectureLocation = lectureLocation;
@@ -132,6 +146,22 @@ public class LectureEntity {
 
 	public UserEntity getCreator() {
 		return creator;
+	}
+
+	public Set<UserEntity> getSpeakers() {
+		return Set.copyOf(speakers);
+	}
+
+	public boolean isSpeaker(Long userId) {
+		return userId != null && speakers.stream().anyMatch(speaker -> speaker.getId().equals(userId));
+	}
+
+	public void updateSpeakers(Set<UserEntity> speakers) {
+		this.speakers.clear();
+		this.speakers.add(creator);
+		if (speakers != null) {
+			this.speakers.addAll(speakers);
+		}
 	}
 
 	public LectureStatus getStatus() {
@@ -205,8 +235,15 @@ public class LectureEntity {
 		return rejectionReason;
 	}
 
+	public LocalDateTime getApprovedAt() {
+		return approvedAt;
+	}
+
 	public void updateApprovalStatus(ApprovalStatus approvalStatus, String rejectionReason) {
 		this.approvalStatus = approvalStatus;
 		this.rejectionReason = rejectionReason;
+		if (approvalStatus == ApprovalStatus.APPROVED) {
+			this.approvedAt = LocalDateTime.now();
+		}
 	}
 }
