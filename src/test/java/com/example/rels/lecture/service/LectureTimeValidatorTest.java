@@ -3,9 +3,7 @@ package com.example.rels.lecture.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -15,36 +13,27 @@ import com.example.rels.domain.lecture.service.LectureTimeValidator;
 
 class LectureTimeValidatorTest {
 
-	private final LectureTimeValidator validator = new LectureTimeValidator();
+    private final LectureTimeValidator validator = new LectureTimeValidator();
 
-	@Test
-	void resolveApplicationDeadlineKeepsRequestedDeadline() {
-		LocalDate lectureDate = LocalDate.of(2026, 9, 10);
-		LocalTime lectureTime = LocalTime.of(16, 30);
-		LocalDateTime requested = LocalDateTime.of(2026, 9, 9, 18, 0);
+    @Test
+    void approvalBeforeFourTwentyOpensSameDayAtFourTwenty() {
+        LocalDateTime approval = LocalDateTime.of(2026, 9, 2, 15, 0);
 
-		assertEquals(requested, validator.resolveApplicationDeadline(requested, lectureDate, lectureTime));
-	}
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> validator.validateApplicationTime(approval, null, LocalDateTime.of(2026, 9, 2, 16, 19)));
 
-	@Test
-	void resolveApplicationDeadlineFallsBackToPreviousThursdayWhenOmitted() {
-		LocalDate lectureDate = LocalDate.of(2026, 9, 10);
-		LocalTime lectureTime = LocalTime.of(16, 30);
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        assertEquals("수강 신청은 2026-09-02 오후 4시 20분부터 가능합니다.", exception.getReason());
+    }
 
-		LocalDateTime deadline = validator.resolveApplicationDeadline(null, lectureDate, lectureTime);
+    @Test
+    void approvalAfterFourTwentyOpensNextDayAtFourTwenty() {
+        LocalDateTime approval = LocalDateTime.of(2026, 9, 2, 16, 21);
 
-		assertEquals(LocalDateTime.of(2026, 9, 3, 23, 59, 59), deadline);
-	}
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> validator.validateApplicationTime(approval, null, LocalDateTime.of(2026, 9, 3, 16, 19)));
 
-	@Test
-	void resolveApplicationDeadlineRejectsDeadlineAtOrAfterLectureStart() {
-		LocalDate lectureDate = LocalDate.of(2026, 9, 10);
-		LocalTime lectureTime = LocalTime.of(16, 30);
-		LocalDateTime requested = LocalDateTime.of(2026, 9, 10, 16, 30);
-
-		var exception = assertThrows(ResponseStatusException.class,
-				() -> validator.resolveApplicationDeadline(requested, lectureDate, lectureTime));
-
-		assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
-	}
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        assertEquals("수강 신청은 2026-09-03 오후 4시 20분부터 가능합니다.", exception.getReason());
+    }
 }

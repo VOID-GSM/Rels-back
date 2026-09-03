@@ -1,17 +1,17 @@
 package com.example.rels.lecture.service;
 
-import com.example.rels.domain.lecture.service.LectureLifecycleHandler;
-import com.example.rels.domain.lecture.service.LectureService;
-import com.example.rels.domain.lecture.service.LectureTimeValidator;
-import com.example.rels.domain.user.entity.Role;
+import com.example.rels.domain.lecture.dto.request.EnrollmentDecisionRequest;
 import com.example.rels.domain.lecture.dto.response.EnrollmentListResponse;
 import com.example.rels.domain.lecture.dto.response.EnrollmentResponse;
-import com.example.rels.domain.lecture.dto.request.EnrollmentDecisionRequest;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
 import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
 import com.example.rels.domain.lecture.entity.LectureEntity;
 import com.example.rels.domain.lecture.repository.LectureEnrollmentRepository;
 import com.example.rels.domain.lecture.repository.LectureRepository;
+import com.example.rels.domain.lecture.service.LectureLifecycleHandler;
+import com.example.rels.domain.lecture.service.LectureService;
+import com.example.rels.domain.lecture.service.LectureTimeValidator;
+import com.example.rels.domain.user.entity.Role;
 import com.example.rels.domain.user.entity.UserEntity;
 import com.example.rels.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -263,6 +263,7 @@ class LectureEnrollmentServiceTest {
         assertEquals(EnrollmentStatus.WAITING, secondWaiting.getStatus());
         assertEquals(EnrollmentStatus.WAITING, thirdWaiting.getStatus());
     }
+
     @Test
     void creatorCanAcceptWaitingUserEvenWhenCapacityIsFull() {
         UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);

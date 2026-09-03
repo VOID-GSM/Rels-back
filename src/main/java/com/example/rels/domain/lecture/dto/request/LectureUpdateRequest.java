@@ -19,7 +19,7 @@ public record LectureUpdateRequest(
 		@NotBlank @Size(max = 255) String lectureLocation,
 		@NotNull LocalDate lectureDate,
 		@NotNull LocalTime lectureTime,
-		LocalDateTime applicationDeadline,
+		@NotNull LocalDateTime applicationDeadline,
 		Set<@NotNull Long> speakerIds
 ) {
 }
