@@ -435,28 +435,31 @@ public class LectureService {
 		}
 	}
 
+	/**
+	 * 신청자·대기자 명단은 누가 신청했는지 보고 판단하는 정보라 학생 누구나 볼 수 있다.
+	 * 다만 누가 거절됐는지는 명단에 뿌릴 정보가 아니라서 개설자와 학생회에게만 내려준다.
+	 */
 	@Transactional(readOnly = true)
 	public EnrollmentListResponse getEnrollments(Long lectureId, Long currentUserId, Role currentUserRole) {
 		LectureEntity lecture = requireLecture(lectureId);
-		validateCreatorOrAdmin(lecture, currentUserId, currentUserRole);
+		validateApprovalVisibility(lecture, currentUserId, currentUserRole);
 		List<LectureEnrollmentEntity> allEnrollments = lectureEnrollmentRepository.findAllByLectureId(lectureId);
 
-		List<EnrollmentUserResponse> enrolled = allEnrollments.stream()
-				.filter(e -> e.getStatus() == EnrollmentStatus.ENROLLED)
-				.map(this::toEnrollmentUserResponse)
-				.toList();
-
-		List<EnrollmentUserResponse> waiting = allEnrollments.stream()
-				.filter(e -> e.getStatus() == EnrollmentStatus.WAITING)
-				.map(this::toEnrollmentUserResponse)
-				.toList();
-
-		List<EnrollmentUserResponse> rejected = allEnrollments.stream()
-				.filter(e -> e.getStatus() == EnrollmentStatus.REJECTED)
-				.map(this::toEnrollmentUserResponse)
-				.toList();
+		List<EnrollmentUserResponse> enrolled = filterEnrollmentsByStatus(allEnrollments, EnrollmentStatus.ENROLLED);
+		List<EnrollmentUserResponse> waiting = filterEnrollmentsByStatus(allEnrollments, EnrollmentStatus.WAITING);
+		List<EnrollmentUserResponse> rejected = canManageEnrollments(lecture, currentUserId, currentUserRole)
+				? filterEnrollmentsByStatus(allEnrollments, EnrollmentStatus.REJECTED)
+				: List.of();
 
 		return new EnrollmentListResponse(enrolled, waiting, rejected);
+	}
+
+	private List<EnrollmentUserResponse> filterEnrollmentsByStatus(List<LectureEnrollmentEntity> enrollments,
+			EnrollmentStatus status) {
+		return enrollments.stream()
+				.filter(e -> e.getStatus() == status)
+				.map(this::toEnrollmentUserResponse)
+				.toList();
 	}
 
 	@Transactional
@@ -572,9 +575,14 @@ public class LectureService {
 	}
 
 	private void validateCreatorOrAdmin(LectureEntity lecture, Long userId, Role userRole) {
-		if (userRole == Role.ADMIN) return;
-		if (lecture.getCreator() == null || !lecture.getCreator().getId().equals(userId)) {
+		if (!canManageEnrollments(lecture, userId, userRole)) {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "강의 작성자 또는 관리자만 접근 가능합니다.");
 		}
+	}
+
+	/** 대기자를 수락·거절하고 거절 명단까지 볼 수 있는 사람인지. */
+	private boolean canManageEnrollments(LectureEntity lecture, Long userId, Role userRole) {
+		if (userRole == Role.ADMIN) return true;
+		return isCreator(lecture, userId);
 	}
 }

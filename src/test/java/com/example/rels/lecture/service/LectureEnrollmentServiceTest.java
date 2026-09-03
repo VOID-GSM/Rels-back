@@ -1,6 +1,7 @@
 package com.example.rels.lecture.service;
 
 import com.example.rels.domain.lecture.dto.request.EnrollmentDecisionRequest;
+import com.example.rels.domain.lecture.dto.response.EnrollmentListResponse;
 import com.example.rels.domain.lecture.dto.response.EnrollmentResponse;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
 import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
@@ -301,5 +302,31 @@ class LectureEnrollmentServiceTest {
         assertEquals("REJECTED", response.enrollmentStatus());
         assertEquals(10L, response.enrolledCount());
         assertEquals(0L, response.waitingCount());
+    }
+
+    @Test
+    void getEnrollmentsLetsAnyStudentSeeRosterButHidesRejectedList() {
+        UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+        UserEntity enrolledUser = TestEntityFactory.createUser("a@test.com", "a", "1000000001", Role.USER, 2L);
+        UserEntity waitingUser = TestEntityFactory.createUser("b@test.com", "b", "1000000002", Role.USER, 3L);
+        UserEntity rejectedUser = TestEntityFactory.createUser("c@test.com", "c", "1000000003", Role.USER, 4L);
+        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(2), LocalTime.NOON, LocalDateTime.now().plusDays(1), 10, 1L);
+
+        when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+        when(lectureEnrollmentRepository.findAllByLectureId(1L)).thenReturn(List.of(
+                TestEntityFactory.createEnrollment(lecture, enrolledUser, EnrollmentStatus.ENROLLED, 1L),
+                TestEntityFactory.createEnrollment(lecture, waitingUser, EnrollmentStatus.WAITING, 2L),
+                TestEntityFactory.createEnrollment(lecture, rejectedUser, EnrollmentStatus.REJECTED, 3L)));
+
+        EnrollmentListResponse asOtherStudent = lectureService.getEnrollments(1L, 9L, Role.USER);
+
+        assertEquals(1, asOtherStudent.enrolled().size());
+        assertEquals(1, asOtherStudent.waiting().size());
+        assertTrue(asOtherStudent.rejected().isEmpty());
+
+        EnrollmentListResponse asCreator = lectureService.getEnrollments(1L, 1L, Role.USER);
+
+        assertEquals(1, asCreator.rejected().size());
+        assertEquals(4L, asCreator.rejected().get(0).userId());
     }
 }
