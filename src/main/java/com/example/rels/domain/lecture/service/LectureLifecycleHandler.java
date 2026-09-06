@@ -68,28 +68,6 @@ public class LectureLifecycleHandler {
         }
     }
 
-    public void promoteWaitingAfterDeadline(LectureEntity lecture, LocalDateTime now) {
-        if (lecture.getId() == null || lecture.getStatus() == LectureStatus.CLOSE) return;
-        if (!isAfterApplicationDeadline(lecture, now)) return;
-
-        int capacity = resolveTotalCapacity(lecture);
-        if (capacity <= 0) return;
-
-        List<LectureEnrollmentEntity> enrollments = lectureEnrollmentRepository.findAllByLectureId(lecture.getId());
-        long enrolledCount = enrollments.stream().filter(e -> e.getStatus() == EnrollmentStatus.ENROLLED).count();
-        if (enrolledCount >= capacity) return;
-
-        List<LectureEnrollmentEntity> waiting = sortByRequestedOrder(enrollments.stream()
-                .filter(e -> e.getStatus() == EnrollmentStatus.WAITING)
-                .toList());
-
-        for (LectureEnrollmentEntity enrollment : waiting) {
-            if (enrolledCount >= capacity) break;
-            enrollment.promoteToEnrolled();
-            enrolledCount++;
-        }
-    }
-
     public void refreshLectureLifecycle(LectureEntity lecture, LocalDateTime now) {
         if (lecture.getId() == null) {
             LocalDateTime lectureEndDateTime = lecture.getLectureEndDateTime();

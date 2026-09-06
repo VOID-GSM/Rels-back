@@ -20,6 +20,7 @@ public record LectureSummaryResponse(
 		String rejectionReason,
 		long enrolledCount,
 		long waitingCount,
+		String myEnrollmentStatus,
 		String lectureLocation,
 		LocalDate lectureDate,
 		LocalTime lectureTime,
