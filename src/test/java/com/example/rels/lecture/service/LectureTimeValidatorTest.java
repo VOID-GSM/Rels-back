@@ -20,7 +20,7 @@ class LectureTimeValidatorTest {
         LocalDateTime approval = LocalDateTime.of(2026, 9, 2, 15, 0);
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
-                () -> validator.validateApplicationTime(approval, null, LocalDateTime.of(2026, 9, 2, 16, 19)));
+                () -> validator.validateApplicationTime(approval, LocalDateTime.of(2026, 9, 2, 16, 19)));
 
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
         assertEquals("수강 신청은 2026-09-02 오후 4시 20분부터 가능합니다.", exception.getReason());
@@ -31,7 +31,7 @@ class LectureTimeValidatorTest {
         LocalDateTime approval = LocalDateTime.of(2026, 9, 2, 16, 21);
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
-                () -> validator.validateApplicationTime(approval, null, LocalDateTime.of(2026, 9, 3, 16, 19)));
+                () -> validator.validateApplicationTime(approval, LocalDateTime.of(2026, 9, 3, 16, 19)));
 
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
         assertEquals("수강 신청은 2026-09-03 오후 4시 20분부터 가능합니다.", exception.getReason());
