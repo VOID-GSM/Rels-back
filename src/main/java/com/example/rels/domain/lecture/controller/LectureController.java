@@ -137,7 +137,7 @@ public class LectureController {
 			@AuthenticationPrincipal AuthenticatedUser currentUser,
 			@Valid @RequestBody EnrollmentDecisionRequest request) {
 		AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		return lectureService.decideWaitingEnrollment(lectureId, userId, authenticatedUser.userId(), authenticatedUser.role(), request);
+		return lectureService.decideWaitingEnrollment(lectureId, userId, authenticatedUser.role(), request);
 	}
 
 	@GetMapping("/enrollments/me")
