@@ -19,9 +19,6 @@ import jakarta.persistence.LockModeType;
 public interface LectureRepository extends JpaRepository<LectureEntity, Long> {
 
 	@EntityGraph(attributePaths = {"creator", "speakers"})
-	Page<LectureEntity> findAllByOrderByCreatedAtDesc(Pageable pageable);
-
-	@EntityGraph(attributePaths = {"creator", "speakers"})
 	Page<LectureEntity> findAllByApprovalStatusOrderByCreatedAtDesc(ApprovalStatus approvalStatus, Pageable pageable);
 
 	@EntityGraph(attributePaths = {"creator", "speakers"})
