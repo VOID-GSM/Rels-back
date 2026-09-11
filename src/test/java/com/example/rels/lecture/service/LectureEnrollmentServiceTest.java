@@ -1,6 +1,5 @@
 package com.example.rels.lecture.service;
 
-import com.example.rels.domain.lecture.dto.request.EnrollmentDecisionRequest;
 import com.example.rels.domain.lecture.dto.response.EnrollmentListResponse;
 import com.example.rels.domain.lecture.dto.response.EnrollmentResponse;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
@@ -214,7 +213,6 @@ class LectureEnrollmentServiceTest {
 
         when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
         when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(enrolled));
-        // 삭제·flush 뒤에 다시 읽는 명단이라 취소한 사람은 빠져 있다.
         when(lectureEnrollmentRepository.findAllByLectureId(1L)).thenReturn(List.of(waiting));
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(29L);
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(1L);
@@ -247,7 +245,6 @@ class LectureEnrollmentServiceTest {
 
         lectureService.cancelEnrollment(1L, 2L);
 
-        // 2학년 자리는 그대로 차 있어서 먼저 기다린 2학년은 대기로 남고, 자리가 빈 1학년이 올라간다.
         assertEquals(EnrollmentStatus.WAITING, waitingSecondGrade.getStatus());
         assertEquals(EnrollmentStatus.ENROLLED, waitingFirstGrade.getStatus());
     }
@@ -273,6 +270,7 @@ class LectureEnrollmentServiceTest {
     }
 
     @Test
+    @DisplayName("학생회는 정원이 차도 대기자를 수락(ENROLLED)으로 변경할 수 있다")
     void adminCanAcceptWaitingUserEvenWhenCapacityIsFull() {
         UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
         UserEntity waitingUser = TestEntityFactory.createUser("wait@test.com", "wait", "1000000001", Role.USER, 2L);
@@ -284,31 +282,11 @@ class LectureEnrollmentServiceTest {
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(10L);
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(1L);
 
-        EnrollmentResponse response = lectureService.decideWaitingEnrollment(1L, 2L, Role.ADMIN, new EnrollmentDecisionRequest(true));
+        EnrollmentResponse response = lectureService.decideWaitingEnrollment(1L, 2L, Role.ADMIN);
 
         assertEquals(EnrollmentStatus.ENROLLED, waiting.getStatus());
         assertEquals("ENROLLED", response.enrollmentStatus());
         assertEquals(11L, response.enrolledCount());
-        assertEquals(0L, response.waitingCount());
-    }
-
-    @Test
-    void adminCanRejectWaitingUser() {
-        UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
-        UserEntity waitingUser = TestEntityFactory.createUser("wait@test.com", "wait", "1000000001", Role.USER, 2L);
-        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(2), LocalTime.NOON, LocalDateTime.now().minusMinutes(1), 10, 1L);
-        LectureEnrollmentEntity waiting = TestEntityFactory.createEnrollment(lecture, waitingUser, EnrollmentStatus.WAITING, 2L);
-
-        when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
-        when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(waiting));
-        when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(10L);
-        when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(1L);
-
-        EnrollmentResponse response = lectureService.decideWaitingEnrollment(1L, 2L, Role.ADMIN, new EnrollmentDecisionRequest(false));
-
-        assertEquals(EnrollmentStatus.REJECTED, waiting.getStatus());
-        assertEquals("REJECTED", response.enrollmentStatus());
-        assertEquals(10L, response.enrolledCount());
         assertEquals(0L, response.waitingCount());
     }
 
@@ -393,7 +371,7 @@ class LectureEnrollmentServiceTest {
     }
 
     @Test
-    @DisplayName("대기자 수락·거절은 개설자가 아니라 학생회만 할 수 있다")
+    @DisplayName("대기자 수락은 개설자가 아니라 학생회만 할 수 있다")
     void creatorCannotDecideWaitingUser() {
         UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
         UserEntity waitingUser = TestEntityFactory.createUser("wait@test.com", "wait", "1000000001", Role.USER, 2L);
@@ -403,7 +381,7 @@ class LectureEnrollmentServiceTest {
         when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
 
         var exception = assertThrows(ResponseStatusException.class,
-                () -> lectureService.decideWaitingEnrollment(1L, 2L, Role.USER, new EnrollmentDecisionRequest(true)));
+                () -> lectureService.decideWaitingEnrollment(1L, 2L, Role.USER));
 
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
         assertEquals(EnrollmentStatus.WAITING, waiting.getStatus());
@@ -423,7 +401,7 @@ class LectureEnrollmentServiceTest {
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(9L);
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(1L);
 
-        lectureService.decideWaitingEnrollment(1L, 2L, Role.ADMIN, new EnrollmentDecisionRequest(true));
+        lectureService.decideWaitingEnrollment(1L, 2L, Role.ADMIN);
 
         assertEquals(EnrollmentStatus.ENROLLED, waiting.getStatus());
         assertEquals(LectureStatus.CONFIRMED, lecture.getStatus());
