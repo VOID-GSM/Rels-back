@@ -9,10 +9,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import com.example.rels.domain.lecture.dto.request.AttendanceUpdateRequest;
-import com.example.rels.domain.lecture.dto.request.LectureApprovalRequest;
-import com.example.rels.domain.lecture.dto.request.LectureCreateRequest;
-import com.example.rels.domain.lecture.dto.request.LectureUpdateRequest;
+import com.example.rels.domain.lecture.dto.request.*;
 import com.example.rels.domain.lecture.dto.response.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
