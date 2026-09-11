@@ -291,29 +291,24 @@ class LectureEnrollmentServiceTest {
     }
 
     @Test
-    void getEnrollmentsLetsAnyStudentSeeRosterButHidesRejectedList() {
+    @DisplayName("학생/개설자 모두 수강 신청 목록(승인/대기)을 조회할 수 있다")
+    void getEnrollmentsLetsUsersSeeRoster() {
         UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
         UserEntity enrolledUser = TestEntityFactory.createUser("a@test.com", "a", "1000000001", Role.USER, 2L);
         UserEntity waitingUser = TestEntityFactory.createUser("b@test.com", "b", "1000000002", Role.USER, 3L);
-        UserEntity rejectedUser = TestEntityFactory.createUser("c@test.com", "c", "1000000003", Role.USER, 4L);
         LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(2), LocalTime.NOON, LocalDateTime.now().plusDays(1), 10, 1L);
 
         when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
         when(lectureEnrollmentRepository.findAllByLectureId(1L)).thenReturn(List.of(
                 TestEntityFactory.createEnrollment(lecture, enrolledUser, EnrollmentStatus.ENROLLED, 1L),
-                TestEntityFactory.createEnrollment(lecture, waitingUser, EnrollmentStatus.WAITING, 2L),
-                TestEntityFactory.createEnrollment(lecture, rejectedUser, EnrollmentStatus.REJECTED, 3L)));
+                TestEntityFactory.createEnrollment(lecture, waitingUser, EnrollmentStatus.WAITING, 2L)));
 
-        EnrollmentListResponse asOtherStudent = lectureService.getEnrollments(1L, 9L, Role.USER);
+        EnrollmentListResponse response = lectureService.getEnrollments(1L, 9L, Role.USER);
 
-        assertEquals(1, asOtherStudent.enrolled().size());
-        assertEquals(1, asOtherStudent.waiting().size());
-        assertTrue(asOtherStudent.rejected().isEmpty());
-
-        EnrollmentListResponse asCreator = lectureService.getEnrollments(1L, 1L, Role.USER);
-
-        assertEquals(1, asCreator.rejected().size());
-        assertEquals(4L, asCreator.rejected().get(0).userId());
+        assertEquals(1, response.enrolled().size());
+        assertEquals(1, response.waiting().size());
+        assertEquals(2L, response.enrolled().get(0).userId());
+        assertEquals(3L, response.waiting().get(0).userId());
     }
 
     @Test
