@@ -6,13 +6,10 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import com.example.rels.domain.lecture.dto.request.AttendanceUpdateRequest;
-import com.example.rels.domain.lecture.dto.request.EnrollmentDecisionRequest;
-import com.example.rels.domain.lecture.dto.request.LectureApprovalRequest;
-import com.example.rels.domain.lecture.dto.request.LectureCreateRequest;
-import com.example.rels.domain.lecture.dto.request.LectureUpdateRequest;
+import com.example.rels.domain.lecture.dto.request.*;
 import com.example.rels.domain.lecture.dto.response.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -37,12 +34,7 @@ import com.example.rels.domain.lecture.repository.LectureRepository;
 @Service
 public class LectureService {
 
-	/**
-	 * 서버는 UTC로 돌지만 마감·강연 시각은 사용자가 한국 시간으로 입력한 값이 그대로 저장된다.
-	 * 시각을 비교할 때는 UTC now가 아니라 한국 시간 벽시계를 기준으로 삼아야 9시간이 밀리지 않는다.
-	 */
 	private static final ZoneId SCHOOL_ZONE = ZoneId.of("Asia/Seoul");
-
 	private static final long CONFIRM_THRESHOLD = 10;
 	private static final int MIN_CAPACITY = 10;
 
@@ -169,7 +161,6 @@ public class LectureService {
 
 		LocalDateTime now = schoolTimeNow();
 
-		// approvedAt·createdAt은 서버가 UTC로 찍은 값이라 한국 시간 벽시계로 옮겨야 16:20이 맞는다.
 		LocalDateTime applicationOpenReference = toSchoolTime(
 				lecture.getApprovedAt() != null ? lecture.getApprovedAt() : lecture.getCreatedAt());
 		timeValidator.validateApplicationTime(applicationOpenReference, now);
@@ -228,17 +219,14 @@ public class LectureService {
 		return new EnrollmentResponse(lectureId, status.name(), nextEnrolledCount, nextWaitingCount, savedEnrollment.getRequestedAt());
 	}
 
-	/** 테스트에서 "지금"을 고정할 수 있도록 열어 둔다. */
 	protected LocalDateTime schoolTimeNow() {
 		return LocalDateTime.now(SCHOOL_ZONE);
 	}
 
-	/** 서버가 UTC로 찍은 시각(createdAt, approvedAt)을 한국 시간 벽시계로 옮긴다. */
 	private LocalDateTime toSchoolTime(LocalDateTime serverTime) {
 		return serverTime.atOffset(ZoneOffset.UTC).atZoneSameInstant(SCHOOL_ZONE).toLocalDateTime();
 	}
 
-	/** 마감 시각은 사용자가 한국 시간으로 넣은 값이 그대로 저장되므로 학교 시간끼리 비교한다. */
 	private boolean isAfterApplicationDeadline(LectureEntity lecture, LocalDateTime now) {
 		return lecture.getApplicationDeadline() != null && now.isAfter(lecture.getApplicationDeadline());
 	}
@@ -253,8 +241,6 @@ public class LectureService {
 
 		EnrollmentStatus canceledStatus = enrollment.getStatus();
 
-		// 마감이 지나면 확정된 명단은 잠근다. 빠진 자리를 다시 채울 방법이 없기 때문이다.
-		// 대기는 아직 자리를 차지한 게 아니라서 마감 뒤에도 스스로 미룰 수 있다.
 		if (canceledStatus == EnrollmentStatus.ENROLLED && isAfterApplicationDeadline(lecture, now)) {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "신청 마감 후에는 확정된 신청을 취소할 수 없습니다.");
 		}
@@ -262,8 +248,6 @@ public class LectureService {
 		lectureEnrollmentRepository.delete(enrollment);
 		lectureEnrollmentRepository.flush();
 
-		// 마감 전에 신청자 자리가 비면 대기 1번이 학년 규칙에 맞게 올라간다.
-		// 마감 뒤에는 자동 승급이 없고 학생회가 직접 수락·거절한다.
 		if (canceledStatus == EnrollmentStatus.ENROLLED && !isAfterApplicationDeadline(lecture, now)) {
 			lifecycleHandler.promoteFirstWaitingUser(lecture, now);
 		}
@@ -289,10 +273,8 @@ public class LectureService {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원과 전체 정원은 동시에 설정할 수 없습니다.");
 		}
 
-		if (totalCapacity != null) {
-			if (totalCapacity < MIN_CAPACITY) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "전체 정원은 " + MIN_CAPACITY + "명 이상이어야 합니다.");
-			}
+		if (totalCapacity != null && totalCapacity < MIN_CAPACITY) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "전체 정원은 " + MIN_CAPACITY + "명 이상이어야 합니다.");
 		}
 
 		if (capacityByGrade != null && !capacityByGrade.isEmpty()) {
@@ -301,13 +283,11 @@ public class LectureService {
 				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원의 합계는 " + MIN_CAPACITY + "명 이상이어야 합니다.");
 			}
 			for (Map.Entry<Integer, Integer> e : capacityByGrade.entrySet()) {
-				Integer grade = e.getKey();
-				Integer cap = e.getValue();
-				if (cap == null) {
-					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원 값은 널일 수 없습니다 (학년: " + grade + ").");
+				if (e.getValue() == null) {
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원 값은 널일 수 없습니다 (학년: " + e.getKey() + ").");
 				}
-				if (cap < 0) {
-					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원은 0 이상이어야 합니다. (학년: " + grade + ")");
+				if (e.getValue() < 0) {
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학년별 정원은 0 이상이어야 합니다. (학년: " + e.getKey() + ")");
 				}
 			}
 		}
@@ -341,7 +321,7 @@ public class LectureService {
 				toSpeakerResponses(lecture),
 				lecture.getStatus().name(),
 				lecture.getApprovalStatus().name(),
-				resolveRejectionReason(lecture, viewerId),
+				null,
 				enrolledCount,
 				waitingCount,
 				myEnrollmentStatusByLectureId.get(lecture.getId()),
@@ -356,10 +336,6 @@ public class LectureService {
 		);
 	}
 
-	/**
-	 * 목록에 있는 강연들에 대해 보는 사람 본인의 신청 상태를 한 번에 읽는다.
-	 * 첫 화면이 "이미 신청했는지"를 알아야 신청 버튼을 잘못 열지 않는다.
-	 */
 	private Map<Long, String> getMyEnrollmentStatusByLectureIds(List<LectureEntity> lectures, Long viewerId) {
 		if (viewerId == null || lectures.isEmpty()) return Map.of();
 
@@ -412,7 +388,7 @@ public class LectureService {
 				toSpeakerResponses(lecture),
 				lecture.getStatus().name(),
 				lecture.getApprovalStatus().name(),
-				resolveRejectionReason(lecture, userId),
+				null,
 				enrolledCount,
 				waitingCount,
 				myEnrollmentStatus,
@@ -437,11 +413,6 @@ public class LectureService {
 	private boolean isCreator(LectureEntity lecture, Long viewerId) {
 		return viewerId != null && lecture.getCreator() != null
 				&& lecture.getCreator().getId().equals(viewerId);
-	}
-
-	private String resolveRejectionReason(LectureEntity lecture, Long viewerId) {
-		if (lecture.getApprovalStatus() != ApprovalStatus.REJECTED) return null;
-		return (isCreator(lecture, viewerId) || lecture.isSpeaker(viewerId)) ? lecture.getRejectionReason() : null;
 	}
 
 	private UserEntity requireUser(Long userId) {
@@ -492,10 +463,6 @@ public class LectureService {
 		}
 	}
 
-	/**
-	 * 신청자·대기자 명단은 누가 신청했는지 보고 판단하는 정보라 학생 누구나 볼 수 있다.
-	 * 다만 누가 거절됐는지는 명단에 뿌릴 정보가 아니라서 개설자와 학생회에게만 내려준다.
-	 */
 	@Transactional(readOnly = true)
 	public EnrollmentListResponse getEnrollments(Long lectureId, Long currentUserId, Role currentUserRole) {
 		LectureEntity lecture = requireLecture(lectureId);
@@ -504,15 +471,12 @@ public class LectureService {
 
 		List<EnrollmentUserResponse> enrolled = filterEnrollmentsByStatus(allEnrollments, EnrollmentStatus.ENROLLED);
 		List<EnrollmentUserResponse> waiting = filterEnrollmentsByStatus(allEnrollments, EnrollmentStatus.WAITING);
-		List<EnrollmentUserResponse> rejected = canManageEnrollments(lecture, currentUserId, currentUserRole)
-				? filterEnrollmentsByStatus(allEnrollments, EnrollmentStatus.REJECTED)
-				: List.of();
 
-		return new EnrollmentListResponse(enrolled, waiting, rejected);
+		return new EnrollmentListResponse(enrolled, waiting, List.of());
 	}
 
 	private List<EnrollmentUserResponse> filterEnrollmentsByStatus(List<LectureEnrollmentEntity> enrollments,
-			EnrollmentStatus status) {
+																   EnrollmentStatus status) {
 		return enrollments.stream()
 				.filter(e -> e.getStatus() == status)
 				.map(this::toEnrollmentUserResponse)
@@ -520,31 +484,26 @@ public class LectureService {
 	}
 
 	@Transactional
-	public EnrollmentResponse decideWaitingEnrollment(Long lectureId, Long enrollmentUserId, Role currentUserRole,
-															  EnrollmentDecisionRequest request) {
+	public EnrollmentResponse decideWaitingEnrollment(Long lectureId, Long enrollmentUserId, Role currentUserRole) {
 		LectureEntity lecture = requireLecture(lectureId);
-		// 대기자를 신청자로 올리는 판단은 학생회만 한다.
 		validateAdmin(currentUserRole);
+
 		LectureEnrollmentEntity enrollment = lectureEnrollmentRepository.findByLectureIdAndUserId(lectureId, enrollmentUserId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "대기 신청 내역이 없습니다."));
+
 		if (enrollment.getStatus() != EnrollmentStatus.WAITING) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "대기 상태의 신청만 수락 또는 거절할 수 있습니다.");
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "대기 상태의 신청만 수락할 수 있습니다.");
 		}
 
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
-		if (request.approved()) {
-			enrollment.promoteToEnrolled();
-			// 마감 뒤에는 학생회가 올려 주는 것이 신청자가 느는 유일한 길이라,
-			// 여기서도 확정 기준(10명)을 다시 본다. 그러지 않으면 10명을 넘겨도 '개설 불확정'으로 남는다.
-			if (lecture.getStatus() != LectureStatus.CLOSE && enrolledCount + 1 >= CONFIRM_THRESHOLD) {
-				lecture.confirm();
-			}
-			return new EnrollmentResponse(lectureId, EnrollmentStatus.ENROLLED.name(), enrolledCount + 1, waitingCount - 1, enrollment.getRequestedAt());
+
+		enrollment.promoteToEnrolled();
+		if (lecture.getStatus() != LectureStatus.CLOSE && enrolledCount + 1 >= CONFIRM_THRESHOLD) {
+			lecture.confirm();
 		}
 
-		enrollment.reject();
-		return new EnrollmentResponse(lectureId, EnrollmentStatus.REJECTED.name(), enrolledCount, waitingCount - 1, enrollment.getRequestedAt());
+		return new EnrollmentResponse(lectureId, EnrollmentStatus.ENROLLED.name(), enrolledCount + 1, waitingCount - 1, enrollment.getRequestedAt());
 	}
 
 	private EnrollmentUserResponse toEnrollmentUserResponse(LectureEnrollmentEntity enrollment) {
@@ -591,7 +550,7 @@ public class LectureService {
 						isCreator(lecture, userId),
 						lecture.getStatus().name(),
 						lecture.getApprovalStatus().name(),
-						lecture.getRejectionReason(),
+						null,
 						lecture.getLectureLocation(),
 						lecture.getLectureDate(),
 						lecture.getLectureTime(),
@@ -625,9 +584,16 @@ public class LectureService {
 		LectureEntity lecture = requireLecture(lectureId);
 		validateCreatorOrAdmin(lecture, currentUserId, currentUserRole);
 
+		List<Long> userIds = requests.stream().map(AttendanceUpdateRequest::userId).toList();
+		Map<Long, LectureEnrollmentEntity> enrollmentMap = lectureEnrollmentRepository
+				.findAllByLectureIdAndUserIdIn(lectureId, userIds).stream()
+				.collect(Collectors.toMap(e -> e.getUser().getId(), Function.identity()));
+
 		for (AttendanceUpdateRequest req : requests) {
-			LectureEnrollmentEntity enrollment = lectureEnrollmentRepository.findByLectureIdAndUserId(lectureId, req.userId())
-					.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "수강 신청 내역이 없습니다. User ID: " + req.userId()));
+			LectureEnrollmentEntity enrollment = enrollmentMap.get(req.userId());
+			if (enrollment == null) {
+				throw new ResponseStatusException(HttpStatus.NOT_FOUND, "수강 신청 내역이 없습니다. User ID: " + req.userId());
+			}
 
 			if (enrollment.getStatus() != EnrollmentStatus.ENROLLED) {
 				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "승인된 수강생만 출석을 변경할 수 있습니다.");
@@ -643,7 +609,6 @@ public class LectureService {
 		}
 	}
 
-	/** 대기자를 수락·거절하고 거절 명단까지 볼 수 있는 사람인지. */
 	private boolean canManageEnrollments(LectureEntity lecture, Long userId, Role userRole) {
 		if (userRole == Role.ADMIN) return true;
 		return isCreator(lecture, userId);

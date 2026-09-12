@@ -1,7 +1,6 @@
 package com.example.rels.domain.lecture.controller;
 
 import com.example.rels.domain.lecture.dto.request.AttendanceUpdateRequest;
-import com.example.rels.domain.lecture.dto.request.EnrollmentDecisionRequest;
 import com.example.rels.domain.lecture.dto.request.LectureApprovalRequest;
 import com.example.rels.domain.lecture.dto.request.LectureCreateRequest;
 import com.example.rels.domain.lecture.dto.request.LectureUpdateRequest;
@@ -134,10 +133,9 @@ public class LectureController {
 	public EnrollmentResponse decideWaitingEnrollment(
 			@PathVariable Long lectureId,
 			@PathVariable Long userId,
-			@AuthenticationPrincipal AuthenticatedUser currentUser,
-			@Valid @RequestBody EnrollmentDecisionRequest request) {
+			@AuthenticationPrincipal AuthenticatedUser currentUser) {
 		AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		return lectureService.decideWaitingEnrollment(lectureId, userId, authenticatedUser.role(), request);
+		return lectureService.decideWaitingEnrollment(lectureId, userId, authenticatedUser.role());
 	}
 
 	@GetMapping("/enrollments/me")
