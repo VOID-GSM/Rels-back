@@ -48,17 +48,7 @@ jobs:
           port: ${{ secrets.GSMSV_PORT }}
           script: |
             cd ~/Rels-back || exit 1
-            
             git pull origin main
             chmod +x gradlew
             ./gradlew build -x test
-            
-            PID=$(pgrep -f 'Rels-.*\.jar')
-            if [ -n "$PID" ]; then
-              kill -15 $PID
-              sleep 3
-            fi
-            
-            # 모든 표준 입출력을 /dev/null로 돌려 SSH 세션 연결을 완전히 끊음
-            nohup java -jar build/libs/*.jar > /dev/null 2>&1 < /dev/null &
-            sleep 3
+            sudo systemctl restart rels
