@@ -51,6 +51,8 @@ jobs:
             
             git pull origin main
             chmod +x gradlew
+            
+            # OOM 방지를 위한 메모리 제한 및 빌드 실행
             ./gradlew build -x test --no-daemon -Dorg.gradle.jvmargs="-Xmx512m"
             
             PID=$(pgrep -f 'Rels-.*\.jar')
@@ -59,7 +61,7 @@ jobs:
               sleep 3
             fi
             
-            # 입출력 완벽 차단 및 disown 처리로 SSH 세션 종속성 제거
+            # 백그라운드 실행 후 disown으로 세션 독립
             nohup java -Xmx512m -jar build/libs/*-SNAPSHOT.jar > app.log 2>&1 < /dev/null &
             disown
             sleep 2
