@@ -48,7 +48,17 @@ jobs:
           port: ${{ secrets.GSMSV_PORT }}
           script: |
             cd ~/Rels-back || exit 1
+            
             git pull origin main
             chmod +x gradlew
             ./gradlew build -x test
-            sudo systemctl restart rels
+            
+            PID=$(pgrep -f 'Rels-.*\.jar')
+            if [ -n "$PID" ]; then
+              kill -15 $PID
+              sleep 3
+            fi
+            
+            # plain이 아닌 실행 가능한 JAR만 지정하여 백그라운드 구동
+            nohup java -jar build/libs/*-SNAPSHOT.jar > app.log 2>&1 < /dev/null &
+            sleep 2
