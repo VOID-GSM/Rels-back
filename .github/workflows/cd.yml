@@ -39,20 +39,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Deploy to Cloudtype
-        uses: cloudtype-github-actions/deploy@v1
+      - name: Execute Remote Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          token: ${{ secrets.CLOUDTYPE_TOKEN }}
-          project: rels
-          stage: main
-          yaml: |
-            name: rels
-            app: dockerfile
-            port: 8080
-            context:
-              git:
-                url: https://github.com/${{ github.repository }}.git
-                ref: main
+          host: ${{ secrets.GSMSV_HOST }}
+          username: ${{ secrets.GSMSV_USERNAME }}
+          key: ${{ secrets.GSMSV_SSH_KEY }}
+          port: ${{ secrets.GSMSV_PORT }}
+          script: |
+            cd ~/Rels-back || exit 1
+            
+            git pull origin main
+            ./gradlew build -x test
+            
+            PID=$(pgrep -f 'Rels-.*\.jar')
+            if [ -n "$PID" ]; then
+              kill -15 $PID
+              sleep 3
+            fi
+            
+            nohup java -jar build/libs/*.jar > app.log 2>&1 &
