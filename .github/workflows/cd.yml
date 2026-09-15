@@ -51,8 +51,6 @@ jobs:
             
             git pull origin main
             chmod +x gradlew
-            
-            # 메모리 사용량을 512MB로 제한하여 OOM 및 SSH 튕김 방지
             ./gradlew build -x test --no-daemon -Dorg.gradle.jvmargs="-Xmx512m"
             
             PID=$(pgrep -f 'Rels-.*\.jar')
@@ -61,6 +59,7 @@ jobs:
               sleep 3
             fi
             
-            # 백그라운드 신규 세션 실행
-            setsid nohup java -Xmx512m -jar build/libs/*-SNAPSHOT.jar > app.log 2>&1 < /dev/null &
+            # 입출력 완벽 차단 및 disown 처리로 SSH 세션 종속성 제거
+            nohup java -Xmx512m -jar build/libs/*-SNAPSHOT.jar > app.log 2>&1 < /dev/null &
+            disown
             sleep 2
