@@ -59,4 +59,5 @@ jobs:
               sleep 3
             fi
             
-            nohup java -jar build/libs/*.jar > app.log 2>&1 &
+            nohup java -jar build/libs/*.jar > app.log 2>&1 < /dev/null &
+            sleep 2
