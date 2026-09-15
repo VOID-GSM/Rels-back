@@ -59,5 +59,6 @@ jobs:
               sleep 3
             fi
             
-            nohup java -jar build/libs/*.jar > app.log 2>&1 < /dev/null &
-            sleep 2
+            # 모든 표준 입출력을 /dev/null로 돌려 SSH 세션 연결을 완전히 끊음
+            nohup java -jar build/libs/*.jar > /dev/null 2>&1 < /dev/null &
+            sleep 3
