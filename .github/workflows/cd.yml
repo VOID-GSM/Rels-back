@@ -44,7 +44,7 @@ jobs:
         with:
           host: ${{ secrets.GSMSV_HOST }}
           username: ${{ secrets.GSMSV_USERNAME }}
-          key: ${{ secrets.GSMSV_SSH_KEY }}
+          password: ${{ secrets.GSMSV_PASSWORD }}
           port: ${{ secrets.GSMSV_PORT }}
           script: |
             cd ~/Rels-back || exit 1
