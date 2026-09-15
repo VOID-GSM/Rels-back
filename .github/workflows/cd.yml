@@ -50,6 +50,7 @@ jobs:
             cd ~/Rels-back || exit 1
             
             git pull origin main
+            chmod +x gradlew
             ./gradlew build -x test
             
             PID=$(pgrep -f 'Rels-.*\.jar')
