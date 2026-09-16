@@ -321,7 +321,7 @@ public class LectureService {
 				toSpeakerResponses(lecture),
 				lecture.getStatus().name(),
 				lecture.getApprovalStatus().name(),
-				null,
+				lecture.getRejectionReason(),
 				enrolledCount,
 				waitingCount,
 				myEnrollmentStatusByLectureId.get(lecture.getId()),

@@ -47,15 +47,5 @@ jobs:
           password: ${{ secrets.GSMSV_PASSWORD }}
           port: ${{ secrets.GSMSV_PORT }}
           script: |
-            cd ~/Rels-back || exit 1
-            
-            git pull origin main
-            ./gradlew build -x test
-            
-            PID=$(pgrep -f 'Rels-.*\.jar')
-            if [ -n "$PID" ]; then
-              kill -15 $PID
-              sleep 3
-            fi
-            
-            nohup java -jar build/libs/*.jar > app.log 2>&1 &
+            nohup ~/deploy.sh > /dev/null 2>&1 &
+            sleep 2
