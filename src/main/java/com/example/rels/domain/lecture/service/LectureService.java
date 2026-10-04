@@ -104,6 +104,11 @@ public class LectureService {
 		validateAdmin(currentUserRole);
 		LectureEntity lecture = requireLecture(lectureId);
 		lecture.updateApprovalStatus(request.approvalStatus(), request.rejectionReason());
+
+		if (request.approvalStatus() == ApprovalStatus.APPROVED) {
+			long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
+			lifecycleHandler.refreshLectureLifecycle(lecture, schoolTimeNow(), enrolledCount);
+		}
 	}
 
 	@Transactional(readOnly = true)
@@ -208,9 +213,8 @@ public class LectureService {
 		EnrollmentStatus status = isFull ? EnrollmentStatus.WAITING : EnrollmentStatus.ENROLLED;
 		LectureEnrollmentEntity savedEnrollment = lectureEnrollmentRepository.save(new LectureEnrollmentEntity(lecture, user, status));
 
-		if (status == EnrollmentStatus.ENROLLED && lecture.getStatus() == LectureStatus.OPEN
-				&& enrolledCount + 1 >= CONFIRM_THRESHOLD) {
-			lecture.confirm();
+		if (status == EnrollmentStatus.ENROLLED) {
+			lifecycleHandler.refreshLectureLifecycle(lecture, now, enrolledCount + 1);
 		}
 
 		long nextEnrolledCount = status == EnrollmentStatus.ENROLLED ? enrolledCount + 1 : enrolledCount;
@@ -254,6 +258,8 @@ public class LectureService {
 
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
+
+		lifecycleHandler.refreshLectureLifecycle(lecture, now, enrolledCount);
 
 		return new EnrollmentResponse(lecture.getId(), "CANCELED", enrolledCount, waitingCount, null);
 	}
@@ -388,7 +394,7 @@ public class LectureService {
 				toSpeakerResponses(lecture),
 				lecture.getStatus().name(),
 				lecture.getApprovalStatus().name(),
-				null,
+				lecture.getRejectionReason(),
 				enrolledCount,
 				waitingCount,
 				myEnrollmentStatus,
@@ -499,9 +505,8 @@ public class LectureService {
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
 
 		enrollment.promoteToEnrolled();
-		if (lecture.getStatus() != LectureStatus.CLOSE && enrolledCount + 1 >= CONFIRM_THRESHOLD) {
-			lecture.confirm();
-		}
+
+		lifecycleHandler.refreshLectureLifecycle(lecture, schoolTimeNow(), enrolledCount + 1);
 
 		return new EnrollmentResponse(lectureId, EnrollmentStatus.ENROLLED.name(), enrolledCount + 1, waitingCount - 1, enrollment.getRequestedAt());
 	}
@@ -550,7 +555,7 @@ public class LectureService {
 						isCreator(lecture, userId),
 						lecture.getStatus().name(),
 						lecture.getApprovalStatus().name(),
-						null,
+						lecture.getRejectionReason(),
 						lecture.getLectureLocation(),
 						lecture.getLectureDate(),
 						lecture.getLectureTime(),
