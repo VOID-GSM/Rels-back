@@ -8,6 +8,7 @@ import java.util.Objects;
 
 import org.springframework.stereotype.Component;
 
+import com.example.rels.domain.lecture.entity.ApprovalStatus;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
 import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
 import com.example.rels.domain.lecture.entity.LectureEntity;
@@ -84,20 +85,33 @@ public class LectureLifecycleHandler {
     public void refreshLectureLifecycle(LectureEntity lecture, LocalDateTime now, long enrolledCount) {
         if (lecture.getStatus() == LectureStatus.CLOSE) return;
 
+        // 1. 강연 종료 시간이 지났으면 CLOSE 처리
         LocalDateTime lectureEndDateTime = lecture.getLectureEndDateTime();
         if (lectureEndDateTime != null && now.isAfter(lectureEndDateTime)) {
             lecture.close();
             return;
         }
 
-        if (lecture.getStatus() != LectureStatus.OPEN) return;
+        // 2. 승인되지 않은 강연은 상태 전환을 하지 않음
+        if (lecture.getApprovalStatus() != ApprovalStatus.APPROVED) {
+            return;
+        }
 
+        // 3. 신청 마감 기한이 지난 경우 처리
         if (lecture.getApplicationDeadline() != null && now.isAfter(lecture.getApplicationDeadline())) {
             if (enrolledCount >= CONFIRM_THRESHOLD) {
                 lecture.confirm();
             } else {
                 lecture.setStatus(LectureStatus.UNCONFIRMED);
             }
+            return;
+        }
+
+        // 4. 승인 상태이고 마감 기한 전인 경우
+        if (enrolledCount >= CONFIRM_THRESHOLD) {
+            lecture.confirm(); // 신청 인원이 10명 이상이면 확정(CONFIRMED)
+        } else {
+            lecture.open();    // 기본적으로 모집 중(OPEN) 상태로 변경
         }
     }
 
