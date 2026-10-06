@@ -246,4 +246,8 @@ public class LectureEntity {
 			this.approvedAt = LocalDateTime.now();
 		}
 	}
+
+	public void open() {
+		this.status = LectureStatus.OPEN;
+	}
 }
