@@ -35,4 +35,7 @@ public interface LectureRepository extends JpaRepository<LectureEntity, Long> {
 	@EntityGraph(attributePaths = {"creator", "speakers"})
 	@Query("select distinct l from LectureEntity l join l.speakers s where s.id = :userId order by l.createdAt desc")
 	List<LectureEntity> findAllBySpeakerIdOrderByCreatedAtDesc(@Param("userId") Long userId);
+
+	@EntityGraph(attributePaths = {"creator", "speakers"})
+	Page<LectureEntity> findAllByOrderByCreatedAtDesc(Pageable pageable);
 }
