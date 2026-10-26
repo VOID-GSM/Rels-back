@@ -70,7 +70,7 @@ public class LectureController {
 	@GetMapping("/discord")
 	public Page<LectureSummaryResponse> getLecturesForDiscord(
 			@PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-		return lectureService.getLectures(pageable, null);
+		return lectureService.getLecturesForDiscord(pageable);
 	}
 
 	@GetMapping("/{lectureId}")
