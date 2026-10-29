@@ -15,6 +15,7 @@ import com.example.rels.domain.lecture.entity.LectureStatus;
 import com.example.rels.domain.lecture.repository.LectureEnrollmentCountProjection;
 import com.example.rels.domain.lecture.repository.LectureEnrollmentRepository;
 import com.example.rels.domain.lecture.repository.LectureRepository;
+import com.example.rels.domain.lecture.service.LectureAccessValidator;
 import com.example.rels.domain.lecture.service.LectureLifecycleHandler;
 import com.example.rels.domain.lecture.service.LectureService;
 import com.example.rels.domain.lecture.service.LectureTimeValidator;
@@ -76,7 +77,8 @@ class LectureServiceTest {
 				lectureEnrollmentRepository,
 				userRepository,
 				timeValidator,
-				lifecycleHandler
+				lifecycleHandler,
+				new LectureAccessValidator(lectureRepository)
 		);
 	}
 

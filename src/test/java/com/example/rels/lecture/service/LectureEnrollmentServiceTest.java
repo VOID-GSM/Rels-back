@@ -8,6 +8,7 @@ import com.example.rels.domain.lecture.entity.LectureEntity;
 import com.example.rels.domain.lecture.entity.LectureStatus;
 import com.example.rels.domain.lecture.repository.LectureEnrollmentRepository;
 import com.example.rels.domain.lecture.repository.LectureRepository;
+import com.example.rels.domain.lecture.service.LectureAccessValidator;
 import com.example.rels.domain.lecture.service.LectureLifecycleHandler;
 import com.example.rels.domain.lecture.service.LectureService;
 import com.example.rels.domain.lecture.service.LectureTimeValidator;
@@ -62,7 +63,8 @@ class LectureEnrollmentServiceTest {
                 lectureEnrollmentRepository,
                 userRepository,
                 timeValidator,
-                lifecycleHandler
+                lifecycleHandler,
+                new LectureAccessValidator(lectureRepository)
         );
 
         LectureEnrollmentEntity savedMock = mock(LectureEnrollmentEntity.class);

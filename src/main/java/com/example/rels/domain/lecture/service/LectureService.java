@@ -1,8 +1,6 @@
 	package com.example.rels.domain.lecture.service;
 	
 	import java.time.LocalDateTime;
-	import java.time.ZoneId;
-	import java.time.ZoneOffset;
 	import java.util.List;
 	import java.util.Map;
 	import java.util.Set;
@@ -34,8 +32,6 @@
 	@Service
 	public class LectureService {
 	
-		private static final ZoneId SCHOOL_ZONE = ZoneId.of("Asia/Seoul");
-		private static final long CONFIRM_THRESHOLD = 10;
 		private static final int MIN_CAPACITY = 10;
 	
 		private final LectureRepository lectureRepository;
@@ -43,17 +39,20 @@
 		private final UserRepository userRepository;
 		private final LectureTimeValidator timeValidator;
 		private final LectureLifecycleHandler lifecycleHandler;
+		private final LectureAccessValidator accessValidator;
 	
 		public LectureService(LectureRepository lectureRepository,
 							  LectureEnrollmentRepository lectureEnrollmentRepository,
 							  UserRepository userRepository,
 							  LectureTimeValidator timeValidator,
-							  LectureLifecycleHandler lifecycleHandler) {
+							  LectureLifecycleHandler lifecycleHandler,
+							  LectureAccessValidator accessValidator) {
 			this.lectureRepository = lectureRepository;
 			this.lectureEnrollmentRepository = lectureEnrollmentRepository;
 			this.userRepository = userRepository;
 			this.timeValidator = timeValidator;
 			this.lifecycleHandler = lifecycleHandler;
+			this.accessValidator = accessValidator;
 		}
 	
 		@Transactional
@@ -92,7 +91,7 @@
 	
 		@Transactional(readOnly = true)
 		public Page<LectureSummaryResponse> getPendingLectures(Role currentUserRole, Pageable pageable) {
-			validateAdmin(currentUserRole);
+			accessValidator.validateAdmin(currentUserRole);
 			Page<LectureEntity> lectures = lectureRepository.findAllByApprovalStatusOrderByCreatedAtDesc(ApprovalStatus.PENDING, pageable);
 			Map<Long, Map<EnrollmentStatus, Long>> enrollmentCountsByLectureId = getEnrollmentCountsByLectureIds(lectures.getContent());
 	
@@ -101,27 +100,27 @@
 	
 		@Transactional
 		public void updateLectureApproval(Long lectureId, Role currentUserRole, LectureApprovalRequest request) {
-			validateAdmin(currentUserRole);
-			LectureEntity lecture = requireLecture(lectureId);
+			accessValidator.validateAdmin(currentUserRole);
+			LectureEntity lecture = accessValidator.requireLecture(lectureId);
 			lecture.updateApprovalStatus(request.approvalStatus(), request.rejectionReason());
 	
 			if (request.approvalStatus() == ApprovalStatus.APPROVED) {
 				long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
-				lifecycleHandler.refreshLectureLifecycle(lecture, schoolTimeNow(), enrolledCount);
+				lifecycleHandler.refreshLectureLifecycle(lecture, SchoolTime.now(), enrolledCount);
 			}
 		}
 	
 		@Transactional(readOnly = true)
 		public LectureDetailResponse getLectureDetail(Long lectureId, Long userId, Role userRole) {
-			LectureEntity lecture = requireLecture(lectureId);
-			validateApprovalVisibility(lecture, userId, userRole);
+			LectureEntity lecture = accessValidator.requireLecture(lectureId);
+			accessValidator.validateApprovalVisibility(lecture, userId, userRole);
 			return toLectureDetail(lecture, userId);
 		}
 	
 		@Transactional(readOnly = true)
 		public LectureDetailResponse getLectureDetailForDiscord(Long lectureId) {
-			LectureEntity lecture = requireLecture(lectureId);
-			validateApprovalVisibility(lecture, null, null);
+			LectureEntity lecture = accessValidator.requireLecture(lectureId);
+			accessValidator.validateApprovalVisibility(lecture, null, null);
 			return toLectureDetail(lecture, null);
 		}
 	
@@ -130,8 +129,8 @@
 			validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
 			timeValidator.validateApplicationDeadline(request.lectureDate(), request.lectureTime(), request.applicationDeadline());
 	
-			LectureEntity lecture = requireLecture(lectureId);
-			validateCreator(lecture, userId, userRole);
+			LectureEntity lecture = accessValidator.requireLecture(lectureId);
+			accessValidator.validateCreator(lecture, userId, userRole);
 	
 			lecture.updateAllDetails(
 					request.title(),
@@ -150,8 +149,8 @@
 	
 		@Transactional
 		public void deleteLecture(Long lectureId, Long userId, Role userRole) {
-			LectureEntity lecture = requireLecture(lectureId);
-			validateCreator(lecture, userId, userRole);
+			LectureEntity lecture = accessValidator.requireLecture(lectureId);
+			accessValidator.validateCreator(lecture, userId, userRole);
 	
 			lectureEnrollmentRepository.deleteByLectureId(lectureId);
 			lectureRepository.delete(lecture);
@@ -159,14 +158,14 @@
 	
 		@Transactional
 		public EnrollmentResponse enroll(Long lectureId, Long userId) {
-			LectureEntity lecture = requireLectureForUpdate(lectureId);
+			LectureEntity lecture = accessValidator.requireLectureForUpdate(lectureId);
 			if (lecture.getApprovalStatus() != ApprovalStatus.APPROVED) {
 				throw new ResponseStatusException(HttpStatus.FORBIDDEN, "승인된 강연만 수강 신청할 수 있습니다.");
 			}
 	
-			LocalDateTime now = schoolTimeNow();
+			LocalDateTime now = SchoolTime.now();
 	
-			LocalDateTime applicationOpenReference = toSchoolTime(
+			LocalDateTime applicationOpenReference = SchoolTime.fromServerTime(
 					lecture.getApprovedAt() != null ? lecture.getApprovedAt() : lecture.getCreatedAt());
 			timeValidator.validateApplicationTime(applicationOpenReference, now);
 			boolean isAfterApplicationDeadline = isAfterApplicationDeadline(lecture, now);
@@ -223,22 +222,14 @@
 			return new EnrollmentResponse(lectureId, status.name(), nextEnrolledCount, nextWaitingCount, savedEnrollment.getRequestedAt());
 		}
 	
-		protected LocalDateTime schoolTimeNow() {
-			return LocalDateTime.now(SCHOOL_ZONE);
-		}
-	
-		private LocalDateTime toSchoolTime(LocalDateTime serverTime) {
-			return serverTime.atOffset(ZoneOffset.UTC).atZoneSameInstant(SCHOOL_ZONE).toLocalDateTime();
-		}
-	
 		private boolean isAfterApplicationDeadline(LectureEntity lecture, LocalDateTime now) {
 			return lecture.getApplicationDeadline() != null && now.isAfter(lecture.getApplicationDeadline());
 		}
 	
 		@Transactional
 		public EnrollmentResponse cancelEnrollment(Long lectureId, Long userId) {
-			LectureEntity lecture = requireLectureForUpdate(lectureId);
-			LocalDateTime now = schoolTimeNow();
+			LectureEntity lecture = accessValidator.requireLectureForUpdate(lectureId);
+			LocalDateTime now = SchoolTime.now();
 	
 			LectureEnrollmentEntity enrollment = lectureEnrollmentRepository.findByLectureIdAndUserId(lectureId, userId)
 					.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "신청 내역이 없습니다."));
@@ -267,7 +258,7 @@
 		@Scheduled(fixedDelayString = "${rels.lecture.lifecycle-sync-delay-ms:60000}")
 		@Transactional
 		public void syncLectureStatuses() {
-			LocalDateTime now = schoolTimeNow();
+			LocalDateTime now = SchoolTime.now();
 			List<LectureEntity> lectures = lectureRepository.findAll();
 			for (LectureEntity lecture : lectures) {
 				lifecycleHandler.refreshLectureLifecycle(lecture, now);
@@ -314,7 +305,7 @@
 				throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
 			}
 			long enrolledCount = getEnrollmentCount(enrollmentCountsByLectureId, lecture.getId(), EnrollmentStatus.ENROLLED);
-			lifecycleHandler.refreshLectureLifecycle(lecture, schoolTimeNow(), enrolledCount);
+			lifecycleHandler.refreshLectureLifecycle(lecture, SchoolTime.now(), enrolledCount);
 			long waitingCount = getEnrollmentCount(enrollmentCountsByLectureId, lecture.getId(), EnrollmentStatus.WAITING);
 	
 			return new LectureSummaryResponse(
@@ -376,7 +367,7 @@
 			if (lecture.getCreator() == null) {
 				throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
 			}
-			lifecycleHandler.refreshLectureLifecycle(lecture, schoolTimeNow());
+			lifecycleHandler.refreshLectureLifecycle(lecture, SchoolTime.now());
 			long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.ENROLLED);
 			long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.WAITING);
 	
@@ -409,18 +400,6 @@
 			);
 		}
 	
-		private void validateApprovalVisibility(LectureEntity lecture, Long viewerId, Role viewerRole) {
-			if (lecture.getApprovalStatus() == ApprovalStatus.APPROVED) return;
-			if (viewerRole == Role.ADMIN) return;
-			if (isCreator(lecture, viewerId) || lecture.isSpeaker(viewerId)) return;
-			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "아직 승인되지 않은 강연입니다.");
-		}
-	
-		private boolean isCreator(LectureEntity lecture, Long viewerId) {
-			return viewerId != null && lecture.getCreator() != null
-					&& lecture.getCreator().getId().equals(viewerId);
-		}
-	
 		private UserEntity requireUser(Long userId) {
 			return userRepository.findById(userId)
 					.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "사용자를 찾을 수 없습니다."));
@@ -443,36 +422,10 @@
 					.toList();
 		}
 	
-		private LectureEntity requireLecture(Long lectureId) {
-			return lectureRepository.findById(lectureId)
-					.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "강의를 찾을 수 없습니다."));
-		}
-	
-		private LectureEntity requireLectureForUpdate(Long lectureId) {
-			return lectureRepository.findByIdForUpdate(lectureId)
-					.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "강의를 찾을 수 없습니다."));
-		}
-	
-		private void validateCreator(LectureEntity lecture, Long userId, Role userRole) {
-			if (lecture.getCreator() == null) {
-				throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
-			}
-			if (userRole == Role.ADMIN) return;
-			if (!lecture.getCreator().getId().equals(userId)) {
-				throw new ResponseStatusException(HttpStatus.FORBIDDEN, "강의 작성자만 수정 또는 삭제할 수 있습니다.");
-			}
-		}
-	
-		private void validateAdmin(Role userRole) {
-			if (userRole != Role.ADMIN) {
-				throw new ResponseStatusException(HttpStatus.FORBIDDEN, "학생회 또는 관리자 권한이 필요합니다.");
-			}
-		}
-	
 		@Transactional(readOnly = true)
 		public EnrollmentListResponse getEnrollments(Long lectureId, Long currentUserId, Role currentUserRole) {
-			LectureEntity lecture = requireLecture(lectureId);
-			validateApprovalVisibility(lecture, currentUserId, currentUserRole);
+			LectureEntity lecture = accessValidator.requireLecture(lectureId);
+			accessValidator.validateApprovalVisibility(lecture, currentUserId, currentUserRole);
 			List<LectureEnrollmentEntity> allEnrollments = lectureEnrollmentRepository.findAllByLectureId(lectureId);
 	
 			List<EnrollmentUserResponse> enrolled = filterEnrollmentsByStatus(allEnrollments, EnrollmentStatus.ENROLLED);
@@ -491,8 +444,8 @@
 	
 		@Transactional
 		public EnrollmentResponse decideWaitingEnrollment(Long lectureId, Long enrollmentUserId, Role currentUserRole) {
-			LectureEntity lecture = requireLecture(lectureId);
-			validateAdmin(currentUserRole);
+			LectureEntity lecture = accessValidator.requireLecture(lectureId);
+			accessValidator.validateAdmin(currentUserRole);
 	
 			LectureEnrollmentEntity enrollment = lectureEnrollmentRepository.findByLectureIdAndUserId(lectureId, enrollmentUserId)
 					.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "대기 신청 내역이 없습니다."));
@@ -506,7 +459,7 @@
 	
 			enrollment.promoteToEnrolled();
 	
-			lifecycleHandler.refreshLectureLifecycle(lecture, schoolTimeNow(), enrolledCount + 1);
+			lifecycleHandler.refreshLectureLifecycle(lecture, SchoolTime.now(), enrolledCount + 1);
 	
 			return new EnrollmentResponse(lectureId, EnrollmentStatus.ENROLLED.name(), enrolledCount + 1, waitingCount - 1, enrollment.getRequestedAt());
 		}
@@ -552,7 +505,7 @@
 					.map(lecture -> new MyCreatedLectureResponse(
 							lecture.getId(),
 							lecture.getTitle(),
-							isCreator(lecture, userId),
+							accessValidator.isCreator(lecture, userId),
 							lecture.getStatus().name(),
 							lecture.getApprovalStatus().name(),
 							lecture.getRejectionReason(),
@@ -569,8 +522,8 @@
 	
 		@Transactional(readOnly = true)
 		public List<LectureAttendanceResponse> getAttendanceList(Long lectureId, Long currentUserId, Role currentUserRole) {
-			LectureEntity lecture = requireLecture(lectureId);
-			validateCreatorOrAdmin(lecture, currentUserId, currentUserRole);
+			LectureEntity lecture = accessValidator.requireLecture(lectureId);
+			accessValidator.validateCreatorOrAdmin(lecture, currentUserId, currentUserRole);
 	
 			return lectureEnrollmentRepository.findAllByLectureId(lectureId).stream()
 					.filter(e -> e.getStatus() == EnrollmentStatus.ENROLLED)
@@ -586,8 +539,8 @@
 	
 		@Transactional
 		public void updateAttendances(Long lectureId, Long currentUserId, Role currentUserRole, List<AttendanceUpdateRequest> requests) {
-			LectureEntity lecture = requireLecture(lectureId);
-			validateCreatorOrAdmin(lecture, currentUserId, currentUserRole);
+			LectureEntity lecture = accessValidator.requireLecture(lectureId);
+			accessValidator.validateCreatorOrAdmin(lecture, currentUserId, currentUserRole);
 	
 			List<Long> userIds = requests.stream().map(AttendanceUpdateRequest::userId).toList();
 			Map<Long, LectureEnrollmentEntity> enrollmentMap = lectureEnrollmentRepository
@@ -608,17 +561,6 @@
 			}
 		}
 	
-		private void validateCreatorOrAdmin(LectureEntity lecture, Long userId, Role userRole) {
-			if (!canManageEnrollments(lecture, userId, userRole)) {
-				throw new ResponseStatusException(HttpStatus.FORBIDDEN, "강의 작성자 또는 관리자만 접근 가능합니다.");
-			}
-		}
-	
-		private boolean canManageEnrollments(LectureEntity lecture, Long userId, Role userRole) {
-			if (userRole == Role.ADMIN) return true;
-			return isCreator(lecture, userId);
-		}
-
 		@Transactional(readOnly = true)
 		public Page<LectureSummaryResponse> getLecturesForDiscord(Pageable pageable) {
 			Page<LectureEntity> lectures = lectureRepository.findAllByOrderByCreatedAtDesc(pageable);
