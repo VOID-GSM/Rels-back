@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.rels.global.security.AuthenticatedUser;
+import com.example.rels.domain.lecture.service.LectureAttendanceService;
 import com.example.rels.domain.lecture.service.LectureEnrollmentService;
 import com.example.rels.domain.lecture.service.LectureService;
 
@@ -29,10 +30,14 @@ public class LectureController {
 
 	private final LectureService lectureService;
 	private final LectureEnrollmentService lectureEnrollmentService;
+	private final LectureAttendanceService lectureAttendanceService;
 
-	public LectureController(LectureService lectureService, LectureEnrollmentService lectureEnrollmentService) {
+	public LectureController(LectureService lectureService,
+							 LectureEnrollmentService lectureEnrollmentService,
+							 LectureAttendanceService lectureAttendanceService) {
 		this.lectureService = lectureService;
 		this.lectureEnrollmentService = lectureEnrollmentService;
+		this.lectureAttendanceService = lectureAttendanceService;
 	}
 
 	@PostMapping
@@ -152,7 +157,7 @@ public class LectureController {
 			@PathVariable Long lectureId,
 			@AuthenticationPrincipal AuthenticatedUser currentUser) {
 		AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		return lectureService.getAttendanceList(lectureId, authenticatedUser.userId(), authenticatedUser.role());
+		return lectureAttendanceService.getAttendanceList(lectureId, authenticatedUser.userId(), authenticatedUser.role());
 	}
 
 	@PatchMapping("/{lectureId}/attendances")
@@ -161,7 +166,7 @@ public class LectureController {
 			@AuthenticationPrincipal AuthenticatedUser currentUser,
 			@Valid @RequestBody List<AttendanceUpdateRequest> requests) {
 		AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		lectureService.updateAttendances(lectureId, authenticatedUser.userId(), authenticatedUser.role(), requests);
+		lectureAttendanceService.updateAttendances(lectureId, authenticatedUser.userId(), authenticatedUser.role(), requests);
 		return ResponseEntity.ok().build();
 	}
 
