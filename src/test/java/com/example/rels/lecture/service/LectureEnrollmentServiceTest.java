@@ -11,7 +11,7 @@ import com.example.rels.domain.lecture.repository.LectureRepository;
 import com.example.rels.domain.lecture.service.LectureAccessValidator;
 import com.example.rels.domain.lecture.service.LectureEnrollmentService;
 import com.example.rels.domain.lecture.service.LectureLifecycleHandler;
-import com.example.rels.domain.lecture.service.LectureService;
+import com.example.rels.domain.lecture.service.LectureStatusScheduler;
 import com.example.rels.domain.lecture.service.LectureTimeValidator;
 import com.example.rels.domain.user.entity.Role;
 import com.example.rels.domain.user.entity.UserEntity;
@@ -54,22 +54,14 @@ class LectureEnrollmentServiceTest {
 
     private LectureLifecycleHandler lifecycleHandler;
 
-    private LectureService lectureService;
-
     private LectureEnrollmentService lectureEnrollmentService;
+
+    private LectureStatusScheduler lectureStatusScheduler;
 
     @BeforeEach
     void setUp() {
         lifecycleHandler = new LectureLifecycleHandler(lectureEnrollmentRepository);
         LectureAccessValidator accessValidator = new LectureAccessValidator(lectureRepository);
-        lectureService = new LectureService(
-                lectureRepository,
-                lectureEnrollmentRepository,
-                userRepository,
-                timeValidator,
-                lifecycleHandler,
-                accessValidator
-        );
         lectureEnrollmentService = new LectureEnrollmentService(
                 lectureEnrollmentRepository,
                 userRepository,
@@ -77,6 +69,7 @@ class LectureEnrollmentServiceTest {
                 lifecycleHandler,
                 accessValidator
         );
+        lectureStatusScheduler = new LectureStatusScheduler(lectureRepository, lifecycleHandler);
 
         LectureEnrollmentEntity savedMock = mock(LectureEnrollmentEntity.class);
         lenient().when(savedMock.getRequestedAt()).thenReturn(LocalDateTime.now());
@@ -275,7 +268,7 @@ class LectureEnrollmentServiceTest {
         when(lectureRepository.findAll()).thenReturn(List.of(lecture));
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(1L);
 
-        lectureService.syncLectureStatuses();
+        lectureStatusScheduler.syncLectureStatuses();
 
         assertEquals(EnrollmentStatus.WAITING, firstWaiting.getStatus());
         assertEquals(EnrollmentStatus.WAITING, secondWaiting.getStatus());

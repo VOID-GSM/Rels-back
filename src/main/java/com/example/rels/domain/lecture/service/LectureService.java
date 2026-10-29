@@ -1,6 +1,5 @@
 	package com.example.rels.domain.lecture.service;
 	
-	import java.time.LocalDateTime;
 	import java.util.List;
 	import java.util.Map;
 	import java.util.Set;
@@ -11,7 +10,6 @@
 	import org.springframework.data.domain.Page;
 	import org.springframework.data.domain.Pageable;
 	import org.springframework.http.HttpStatus;
-	import org.springframework.scheduling.annotation.Scheduled;
 	import org.springframework.stereotype.Service;
 	import org.springframework.transaction.annotation.Transactional;
 	import org.springframework.web.server.ResponseStatusException;
@@ -152,16 +150,6 @@
 	
 			lectureEnrollmentRepository.deleteByLectureId(lectureId);
 			lectureRepository.delete(lecture);
-		}
-	
-		@Scheduled(fixedDelayString = "${rels.lecture.lifecycle-sync-delay-ms:60000}")
-		@Transactional
-		public void syncLectureStatuses() {
-			LocalDateTime now = SchoolTime.now();
-			List<LectureEntity> lectures = lectureRepository.findAll();
-			for (LectureEntity lecture : lectures) {
-				lifecycleHandler.refreshLectureLifecycle(lecture, now);
-			}
 		}
 	
 		private void validateLectureCapacityRules(Map<Integer, Integer> capacityByGrade, Integer totalCapacity) {
