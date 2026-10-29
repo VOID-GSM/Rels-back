@@ -83,36 +83,34 @@ public class LectureLifecycleHandler {
     }
 
     public void refreshLectureLifecycle(LectureEntity lecture, LocalDateTime now, long enrolledCount) {
-        if (lecture.getStatus() == LectureStatus.CLOSE) return;
+        lecture.setStatus(resolveStatus(lecture, now, enrolledCount));
+    }
 
-        // 1. 강연 종료 시간이 지났으면 CLOSE 처리
+    /**
+     * 엔티티를 바꾸지 않고 현재 시점의 강연 상태만 계산한다.
+     * 읽기 전용 트랜잭션에서는 이 값으로 응답을 만들고, 실제 반영은 쓰기 트랜잭션과 스케줄러가 맡는다.
+     */
+    public LectureStatus resolveStatus(LectureEntity lecture, LocalDateTime now, long enrolledCount) {
+        if (lecture.getStatus() == LectureStatus.CLOSE) return LectureStatus.CLOSE;
+
+        // 1. 강연 종료 시간이 지났으면 CLOSE
         LocalDateTime lectureEndDateTime = lecture.getLectureEndDateTime();
         if (lectureEndDateTime != null && now.isAfter(lectureEndDateTime)) {
-            lecture.close();
-            return;
+            return LectureStatus.CLOSE;
         }
 
         // 2. 승인되지 않은 강연은 상태 전환을 하지 않음
         if (lecture.getApprovalStatus() != ApprovalStatus.APPROVED) {
-            return;
+            return lecture.getStatus();
         }
 
-        // 3. 신청 마감 기한이 지난 경우 처리
+        // 3. 신청 마감 기한이 지난 경우
         if (lecture.getApplicationDeadline() != null && now.isAfter(lecture.getApplicationDeadline())) {
-            if (enrolledCount >= CONFIRM_THRESHOLD) {
-                lecture.confirm();
-            } else {
-                lecture.setStatus(LectureStatus.UNCONFIRMED);
-            }
-            return;
+            return enrolledCount >= CONFIRM_THRESHOLD ? LectureStatus.CONFIRMED : LectureStatus.UNCONFIRMED;
         }
 
-        // 4. 승인 상태이고 마감 기한 전인 경우
-        if (enrolledCount >= CONFIRM_THRESHOLD) {
-            lecture.confirm(); // 신청 인원이 10명 이상이면 확정(CONFIRMED)
-        } else {
-            lecture.open();    // 기본적으로 모집 중(OPEN) 상태로 변경
-        }
+        // 4. 승인 상태이고 마감 기한 전인 경우: 10명 이상이면 확정(CONFIRMED), 아니면 모집 중(OPEN)
+        return enrolledCount >= CONFIRM_THRESHOLD ? LectureStatus.CONFIRMED : LectureStatus.OPEN;
     }
 
     public int resolveTotalCapacity(LectureEntity lecture) {

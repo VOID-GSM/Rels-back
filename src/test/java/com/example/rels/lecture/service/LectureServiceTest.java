@@ -42,7 +42,6 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -61,13 +60,13 @@ class LectureServiceTest {
 	@Mock
 	private LectureTimeValidator timeValidator;
 
-	@Mock
 	private LectureLifecycleHandler lifecycleHandler;
 
 	private LectureService lectureService;
 
 	@BeforeEach
 	void setUp() {
+		lifecycleHandler = new LectureLifecycleHandler(lectureEnrollmentRepository);
 		lectureService = new LectureService(
 				lectureRepository,
 				lectureEnrollmentRepository,
@@ -113,8 +112,6 @@ class LectureServiceTest {
 		when(lectureEnrollmentRepository.countEnrollmentsByLectureIds(List.of(11L, 12L)))
 				.thenReturn(List.of(projection1_enrolled, projection1_waiting, projection2_enrolled, projection2_waiting));
 
-		doNothing().when(lifecycleHandler).refreshLectureLifecycle(any(LectureEntity.class), any(LocalDateTime.class), anyLong());
-
 		Page<LectureSummaryResponse> lectures = lectureService.getLectures(pageable, 2L);
 
 		assertEquals(2, lectures.getTotalElements());
@@ -150,8 +147,6 @@ class LectureServiceTest {
 		when(lectureEnrollmentRepository.countEnrollmentsByLectureIds(List.of(11L)))
 				.thenReturn(List.of(projection_enrolled, projection_waiting));
 
-		doNothing().when(lifecycleHandler).refreshLectureLifecycle(any(LectureEntity.class), any(LocalDateTime.class), anyLong());
-
 		Page<LectureSummaryResponse> lectures = lectureService.getLectures(pageable, 2L);
 
 		assertEquals(LectureStatus.CLOSE.name(), lectures.getContent().get(0).lectureStatus());
@@ -168,12 +163,50 @@ class LectureServiceTest {
 		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.WAITING)).thenReturn(0L);
 		when(lectureEnrollmentRepository.findByLectureIdAndUserId(11L, 2L)).thenReturn(Optional.empty());
 
-		doNothing().when(lifecycleHandler).refreshLectureLifecycle(any(LectureEntity.class), any(LocalDateTime.class));
-
 		LectureDetailResponse response = lectureService.getLectureDetail(11L, 2L, Role.USER);
 
 		assertEquals(LectureStatus.CLOSE.name(), response.lectureStatus());
 		assertEquals(LectureStatus.CLOSE, endedLecture.getStatus());
+	}
+
+	@Test
+	@DisplayName("상세 조회는 계산한 상태를 응답에만 담고 엔티티 상태는 바꾸지 않는다.")
+	void getLectureDetailDoesNotMutateLectureStatus() {
+		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+		LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(7), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20, 11L);
+
+		when(lectureRepository.findById(11L)).thenReturn(Optional.of(lecture));
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.ENROLLED)).thenReturn(10L);
+		when(lectureEnrollmentRepository.countByLectureIdAndStatus(11L, EnrollmentStatus.WAITING)).thenReturn(0L);
+		when(lectureEnrollmentRepository.findByLectureIdAndUserId(11L, 2L)).thenReturn(Optional.empty());
+
+		LectureDetailResponse response = lectureService.getLectureDetail(11L, 2L, Role.USER);
+
+		assertEquals(LectureStatus.CONFIRMED.name(), response.lectureStatus());
+		assertEquals(LectureStatus.OPEN, lecture.getStatus());
+		verify(lectureEnrollmentRepository, times(1)).countByLectureIdAndStatus(11L, EnrollmentStatus.ENROLLED);
+	}
+
+	@Test
+	@DisplayName("목록 조회는 계산한 상태를 응답에만 담고 엔티티 상태는 바꾸지 않는다.")
+	void getLecturesDoesNotMutateLectureStatus() {
+		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+		LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(7), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20, 11L);
+
+		Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+		when(lectureRepository.findAllByApprovalStatusOrderByCreatedAtDesc(eq(ApprovalStatus.APPROVED), any()))
+				.thenReturn(new PageImpl<>(List.of(lecture), pageable, 1));
+
+		LectureEnrollmentCountProjection projection = mock(LectureEnrollmentCountProjection.class);
+		when(projection.getLectureId()).thenReturn(11L);
+		when(projection.getStatus()).thenReturn(EnrollmentStatus.ENROLLED);
+		when(projection.getEnrollmentCount()).thenReturn(10L);
+		when(lectureEnrollmentRepository.countEnrollmentsByLectureIds(List.of(11L))).thenReturn(List.of(projection));
+
+		Page<LectureSummaryResponse> lectures = lectureService.getLectures(pageable, null);
+
+		assertEquals(LectureStatus.CONFIRMED.name(), lectures.getContent().get(0).lectureStatus());
+		assertEquals(LectureStatus.OPEN, lecture.getStatus());
 	}
 
 	@Test
