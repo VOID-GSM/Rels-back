@@ -283,7 +283,7 @@ class LectureEnrollmentServiceTest {
         LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(2), LocalTime.NOON, LocalDateTime.now().minusMinutes(1), 10, 1L);
         LectureEnrollmentEntity waiting = TestEntityFactory.createEnrollment(lecture, waitingUser, EnrollmentStatus.WAITING, 2L);
 
-        when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+        when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
         when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(waiting));
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(10L);
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(1L);
@@ -379,13 +379,12 @@ class LectureEnrollmentServiceTest {
         LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(2), LocalTime.NOON, LocalDateTime.now().minusMinutes(1), 10, 1L);
         LectureEnrollmentEntity waiting = TestEntityFactory.createEnrollment(lecture, waitingUser, EnrollmentStatus.WAITING, 2L);
 
-        when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
-
         var exception = assertThrows(ResponseStatusException.class,
                 () -> lectureEnrollmentService.decideWaitingEnrollment(1L, 2L, Role.USER));
 
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
         assertEquals(EnrollmentStatus.WAITING, waiting.getStatus());
+        verifyNoInteractions(lectureRepository, lectureEnrollmentRepository);
     }
 
     @Test
@@ -397,7 +396,7 @@ class LectureEnrollmentServiceTest {
         lecture.setStatus(LectureStatus.UNCONFIRMED);
         LectureEnrollmentEntity waiting = TestEntityFactory.createEnrollment(lecture, waitingUser, EnrollmentStatus.WAITING, 2L);
 
-        when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+        when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
         when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(waiting));
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(9L);
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(1L);
@@ -417,7 +416,7 @@ class LectureEnrollmentServiceTest {
 
         LectureEnrollmentEntity waitingEnrollment = new LectureEnrollmentEntity(lecture, student, EnrollmentStatus.WAITING);
 
-        when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+        when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
         when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(waitingEnrollment));
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(5L);
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(2L);
@@ -427,5 +426,7 @@ class LectureEnrollmentServiceTest {
         assertEquals(EnrollmentStatus.ENROLLED.name(), response.enrollmentStatus());
         assertEquals(6L, response.enrolledCount());
         assertEquals(1L, response.waitingCount());
+        verify(lectureRepository).findByIdForUpdate(1L);
+        verify(lectureRepository, never()).findById(any());
     }
 }
