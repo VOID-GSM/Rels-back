@@ -13,6 +13,7 @@ import org.springframework.data.repository.query.Param;
 
 import com.example.rels.domain.lecture.entity.ApprovalStatus;
 import com.example.rels.domain.lecture.entity.LectureEntity;
+import com.example.rels.domain.lecture.entity.LectureStatus;
 
 import jakarta.persistence.LockModeType;
 
@@ -38,4 +39,6 @@ public interface LectureRepository extends JpaRepository<LectureEntity, Long> {
 
 	@EntityGraph(attributePaths = {"creator", "speakers"})
 	Page<LectureEntity> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+	List<LectureEntity> findAllByStatusNot(LectureStatus status);
 }
