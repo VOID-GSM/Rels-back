@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.rels.global.security.AuthenticatedUser;
+import com.example.rels.domain.lecture.service.LectureEnrollmentService;
 import com.example.rels.domain.lecture.service.LectureService;
 
 import jakarta.validation.Valid;
@@ -27,9 +28,11 @@ import java.util.List;
 public class LectureController {
 
 	private final LectureService lectureService;
+	private final LectureEnrollmentService lectureEnrollmentService;
 
-	public LectureController(LectureService lectureService) {
+	public LectureController(LectureService lectureService, LectureEnrollmentService lectureEnrollmentService) {
 		this.lectureService = lectureService;
+		this.lectureEnrollmentService = lectureEnrollmentService;
 	}
 
 	@PostMapping
@@ -110,7 +113,7 @@ public class LectureController {
 			@PathVariable Long lectureId,
 			@AuthenticationPrincipal AuthenticatedUser currentUser) {
 		AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		return lectureService.enroll(lectureId, authenticatedUser.userId());
+		return lectureEnrollmentService.enroll(lectureId, authenticatedUser.userId());
 	}
 
 	@DeleteMapping("/{lectureId}/enrollments")
@@ -118,7 +121,7 @@ public class LectureController {
 			@PathVariable Long lectureId,
 			@AuthenticationPrincipal AuthenticatedUser currentUser) {
 		AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		return lectureService.cancelEnrollment(lectureId, authenticatedUser.userId());
+		return lectureEnrollmentService.cancelEnrollment(lectureId, authenticatedUser.userId());
 	}
 
 	@GetMapping("/{lectureId}/enrollments")
@@ -126,7 +129,7 @@ public class LectureController {
 			@PathVariable Long lectureId,
 			@AuthenticationPrincipal AuthenticatedUser currentUser) {
 		AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		return lectureService.getEnrollments(lectureId, authenticatedUser.userId(), authenticatedUser.role());
+		return lectureEnrollmentService.getEnrollments(lectureId, authenticatedUser.userId(), authenticatedUser.role());
 	}
 
 	@PatchMapping("/{lectureId}/enrollments/{userId}/decision")
@@ -135,7 +138,7 @@ public class LectureController {
 			@PathVariable Long userId,
 			@AuthenticationPrincipal AuthenticatedUser currentUser) {
 		AuthenticatedUser authenticatedUser = requireUser(currentUser);
-		return lectureService.decideWaitingEnrollment(lectureId, userId, authenticatedUser.role());
+		return lectureEnrollmentService.decideWaitingEnrollment(lectureId, userId, authenticatedUser.role());
 	}
 
 	@GetMapping("/enrollments/me")

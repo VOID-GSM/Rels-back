@@ -9,6 +9,7 @@ import com.example.rels.domain.lecture.entity.LectureStatus;
 import com.example.rels.domain.lecture.repository.LectureEnrollmentRepository;
 import com.example.rels.domain.lecture.repository.LectureRepository;
 import com.example.rels.domain.lecture.service.LectureAccessValidator;
+import com.example.rels.domain.lecture.service.LectureEnrollmentService;
 import com.example.rels.domain.lecture.service.LectureLifecycleHandler;
 import com.example.rels.domain.lecture.service.LectureService;
 import com.example.rels.domain.lecture.service.LectureTimeValidator;
@@ -55,16 +56,26 @@ class LectureEnrollmentServiceTest {
 
     private LectureService lectureService;
 
+    private LectureEnrollmentService lectureEnrollmentService;
+
     @BeforeEach
     void setUp() {
         lifecycleHandler = new LectureLifecycleHandler(lectureEnrollmentRepository);
+        LectureAccessValidator accessValidator = new LectureAccessValidator(lectureRepository);
         lectureService = new LectureService(
                 lectureRepository,
                 lectureEnrollmentRepository,
                 userRepository,
                 timeValidator,
                 lifecycleHandler,
-                new LectureAccessValidator(lectureRepository)
+                accessValidator
+        );
+        lectureEnrollmentService = new LectureEnrollmentService(
+                lectureEnrollmentRepository,
+                userRepository,
+                timeValidator,
+                lifecycleHandler,
+                accessValidator
         );
 
         LectureEnrollmentEntity savedMock = mock(LectureEnrollmentEntity.class);
@@ -81,7 +92,7 @@ class LectureEnrollmentServiceTest {
         doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "강의가 종료되었습니다."))
                 .when(timeValidator).validateApplicationTime(any(), any());
 
-        var exception = assertThrows(ResponseStatusException.class, () -> lectureService.enroll(1L, 2L));
+        var exception = assertThrows(ResponseStatusException.class, () -> lectureEnrollmentService.enroll(1L, 2L));
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
     }
 
@@ -95,7 +106,7 @@ class LectureEnrollmentServiceTest {
         when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
         when(userRepository.findById(2L)).thenReturn(Optional.of(speaker));
 
-        var exception = assertThrows(ResponseStatusException.class, () -> lectureService.enroll(1L, 2L));
+        var exception = assertThrows(ResponseStatusException.class, () -> lectureEnrollmentService.enroll(1L, 2L));
 
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
         verify(lectureEnrollmentRepository, never()).save(any());
@@ -111,7 +122,7 @@ class LectureEnrollmentServiceTest {
         doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "오후 4시 20분부터 가능합니다."))
                 .when(timeValidator).validateApplicationTime(any(), any());
 
-        var exception = assertThrows(ResponseStatusException.class, () -> lectureService.enroll(1L, 2L));
+        var exception = assertThrows(ResponseStatusException.class, () -> lectureEnrollmentService.enroll(1L, 2L));
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
         assertNotNull(exception.getReason());
         assertTrue(exception.getReason().contains("오후 4시 20분부터 가능합니다."));
@@ -129,7 +140,7 @@ class LectureEnrollmentServiceTest {
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(9L);
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
 
-        EnrollmentResponse response = lectureService.enroll(1L, 2L);
+        EnrollmentResponse response = lectureEnrollmentService.enroll(1L, 2L);
 
         ArgumentCaptor<LectureEnrollmentEntity> captor = ArgumentCaptor.forClass(LectureEnrollmentEntity.class);
         verify(lectureEnrollmentRepository).save(captor.capture());
@@ -153,7 +164,7 @@ class LectureEnrollmentServiceTest {
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(30L);
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(4L);
 
-        EnrollmentResponse response = lectureService.enroll(1L, 2L);
+        EnrollmentResponse response = lectureEnrollmentService.enroll(1L, 2L);
 
         ArgumentCaptor<LectureEnrollmentEntity> captor = ArgumentCaptor.forClass(LectureEnrollmentEntity.class);
         verify(lectureEnrollmentRepository).save(captor.capture());
@@ -175,7 +186,7 @@ class LectureEnrollmentServiceTest {
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
 
-        EnrollmentResponse response = lectureService.enroll(1L, 2L);
+        EnrollmentResponse response = lectureEnrollmentService.enroll(1L, 2L);
 
         ArgumentCaptor<LectureEnrollmentEntity> captor = ArgumentCaptor.forClass(LectureEnrollmentEntity.class);
         verify(lectureEnrollmentRepository).save(captor.capture());
@@ -197,7 +208,7 @@ class LectureEnrollmentServiceTest {
         when(lectureEnrollmentRepository.findAllByLectureId(1L))
                 .thenReturn(List.of(TestEntityFactory.createEnrollment(lecture, secondGrade, EnrollmentStatus.ENROLLED, 1L)));
 
-        EnrollmentResponse response = lectureService.enroll(1L, 2L);
+        EnrollmentResponse response = lectureEnrollmentService.enroll(1L, 2L);
 
         assertEquals("ENROLLED", response.enrollmentStatus());
     }
@@ -219,7 +230,7 @@ class LectureEnrollmentServiceTest {
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(29L);
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(1L);
 
-        EnrollmentResponse response = lectureService.cancelEnrollment(1L, 2L);
+        EnrollmentResponse response = lectureEnrollmentService.cancelEnrollment(1L, 2L);
 
         verify(lectureEnrollmentRepository).delete(enrolled);
         assertEquals(EnrollmentStatus.ENROLLED, waiting.getStatus());
@@ -245,7 +256,7 @@ class LectureEnrollmentServiceTest {
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(1L);
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(1L);
 
-        lectureService.cancelEnrollment(1L, 2L);
+        lectureEnrollmentService.cancelEnrollment(1L, 2L);
 
         assertEquals(EnrollmentStatus.WAITING, waitingSecondGrade.getStatus());
         assertEquals(EnrollmentStatus.ENROLLED, waitingFirstGrade.getStatus());
@@ -284,7 +295,7 @@ class LectureEnrollmentServiceTest {
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(10L);
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(1L);
 
-        EnrollmentResponse response = lectureService.decideWaitingEnrollment(1L, 2L, Role.ADMIN);
+        EnrollmentResponse response = lectureEnrollmentService.decideWaitingEnrollment(1L, 2L, Role.ADMIN);
 
         assertEquals(EnrollmentStatus.ENROLLED, waiting.getStatus());
         assertEquals("ENROLLED", response.enrollmentStatus());
@@ -305,7 +316,7 @@ class LectureEnrollmentServiceTest {
                 TestEntityFactory.createEnrollment(lecture, enrolledUser, EnrollmentStatus.ENROLLED, 1L),
                 TestEntityFactory.createEnrollment(lecture, waitingUser, EnrollmentStatus.WAITING, 2L)));
 
-        EnrollmentListResponse response = lectureService.getEnrollments(1L, 9L, Role.USER);
+        EnrollmentListResponse response = lectureEnrollmentService.getEnrollments(1L, 9L, Role.USER);
 
         assertEquals(1, response.enrolled().size());
         assertEquals(1, response.waiting().size());
@@ -324,7 +335,7 @@ class LectureEnrollmentServiceTest {
         when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(enrolled));
 
         var exception = assertThrows(ResponseStatusException.class,
-                () -> lectureService.cancelEnrollment(1L, 2L));
+                () -> lectureEnrollmentService.cancelEnrollment(1L, 2L));
 
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
         verify(lectureEnrollmentRepository, never()).delete(enrolled);
@@ -342,7 +353,7 @@ class LectureEnrollmentServiceTest {
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(30L);
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
 
-        EnrollmentResponse response = lectureService.cancelEnrollment(1L, 2L);
+        EnrollmentResponse response = lectureEnrollmentService.cancelEnrollment(1L, 2L);
 
         verify(lectureEnrollmentRepository).delete(waiting);
         assertEquals("CANCELED", response.enrollmentStatus());
@@ -359,7 +370,7 @@ class LectureEnrollmentServiceTest {
         when(userRepository.findById(2L)).thenReturn(Optional.of(applicant));
         when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.empty());
 
-        EnrollmentResponse response = lectureService.enroll(1L, 2L);
+        EnrollmentResponse response = lectureEnrollmentService.enroll(1L, 2L);
 
         assertEquals("WAITING", response.enrollmentStatus());
         ArgumentCaptor<LectureEnrollmentEntity> captor = ArgumentCaptor.forClass(LectureEnrollmentEntity.class);
@@ -378,7 +389,7 @@ class LectureEnrollmentServiceTest {
         when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
 
         var exception = assertThrows(ResponseStatusException.class,
-                () -> lectureService.decideWaitingEnrollment(1L, 2L, Role.USER));
+                () -> lectureEnrollmentService.decideWaitingEnrollment(1L, 2L, Role.USER));
 
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
         assertEquals(EnrollmentStatus.WAITING, waiting.getStatus());
@@ -398,9 +409,30 @@ class LectureEnrollmentServiceTest {
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(9L);
         when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(1L);
 
-        lectureService.decideWaitingEnrollment(1L, 2L, Role.ADMIN);
+        lectureEnrollmentService.decideWaitingEnrollment(1L, 2L, Role.ADMIN);
 
         assertEquals(EnrollmentStatus.ENROLLED, waiting.getStatus());
         assertEquals(LectureStatus.CONFIRMED, lecture.getStatus());
+    }
+
+    @Test
+    @DisplayName("대기중인 신청자를 수락(ENROLLED)으로 변경할 수 있다.")
+    void decideWaitingEnrollmentPromotesToEnrolled() {
+        UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+        UserEntity student = TestEntityFactory.createUser("student@test.com", "student", "2000000000", Role.USER, 2L);
+        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20, 1L);
+
+        LectureEnrollmentEntity waitingEnrollment = new LectureEnrollmentEntity(lecture, student, EnrollmentStatus.WAITING);
+
+        when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+        when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(waitingEnrollment));
+        when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(5L);
+        when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(2L);
+
+        EnrollmentResponse response = lectureEnrollmentService.decideWaitingEnrollment(1L, 2L, Role.ADMIN);
+
+        assertEquals(EnrollmentStatus.ENROLLED.name(), response.enrollmentStatus());
+        assertEquals(6L, response.enrolledCount());
+        assertEquals(1L, response.waitingCount());
     }
 }

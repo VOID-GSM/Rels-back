@@ -3,7 +3,6 @@ package com.example.rels.lecture.service;
 import com.example.rels.domain.lecture.dto.request.AttendanceUpdateRequest;
 import com.example.rels.domain.lecture.dto.request.LectureCreateRequest;
 import com.example.rels.domain.lecture.dto.request.LectureUpdateRequest;
-import com.example.rels.domain.lecture.dto.response.EnrollmentResponse;
 import com.example.rels.domain.lecture.dto.response.LectureDetailResponse;
 import com.example.rels.domain.lecture.dto.response.LectureSummaryResponse;
 import com.example.rels.domain.lecture.entity.ApprovalStatus;
@@ -277,26 +276,6 @@ class LectureServiceTest {
 		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
 	}
 
-	@Test
-	@DisplayName("대기중인 신청자를 수락(ENROLLED)으로 변경할 수 있다.")
-	void decideWaitingEnrollmentPromotesToEnrolled() {
-		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
-		UserEntity student = TestEntityFactory.createUser("student@test.com", "student", "2000000000", Role.USER, 2L);
-		LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20, 1L);
-
-		LectureEnrollmentEntity waitingEnrollment = new LectureEnrollmentEntity(lecture, student, EnrollmentStatus.WAITING);
-
-		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
-		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(waitingEnrollment));
-		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(5L);
-		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(2L);
-
-		EnrollmentResponse response = lectureService.decideWaitingEnrollment(1L, 2L, Role.ADMIN);
-
-		assertEquals(EnrollmentStatus.ENROLLED.name(), response.enrollmentStatus());
-		assertEquals(6L, response.enrolledCount());
-		assertEquals(1L, response.waitingCount());
-	}
 
 	@Test
 	@DisplayName("출석 상태 일괄 변경 시 N+1 문제 해결을 위해 배치 조회를 정상 수행한다.")
