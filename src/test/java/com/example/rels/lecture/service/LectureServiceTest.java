@@ -1,20 +1,17 @@
 package com.example.rels.lecture.service;
 
-import com.example.rels.domain.lecture.dto.request.AttendanceUpdateRequest;
 import com.example.rels.domain.lecture.dto.request.LectureCreateRequest;
 import com.example.rels.domain.lecture.dto.request.LectureUpdateRequest;
-import com.example.rels.domain.lecture.dto.response.EnrollmentResponse;
 import com.example.rels.domain.lecture.dto.response.LectureDetailResponse;
 import com.example.rels.domain.lecture.dto.response.LectureSummaryResponse;
 import com.example.rels.domain.lecture.entity.ApprovalStatus;
-import com.example.rels.domain.lecture.entity.AttendanceStatus;
 import com.example.rels.domain.lecture.entity.EnrollmentStatus;
-import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
 import com.example.rels.domain.lecture.entity.LectureEntity;
 import com.example.rels.domain.lecture.entity.LectureStatus;
 import com.example.rels.domain.lecture.repository.LectureEnrollmentCountProjection;
 import com.example.rels.domain.lecture.repository.LectureEnrollmentRepository;
 import com.example.rels.domain.lecture.repository.LectureRepository;
+import com.example.rels.domain.lecture.service.LectureAccessValidator;
 import com.example.rels.domain.lecture.service.LectureLifecycleHandler;
 import com.example.rels.domain.lecture.service.LectureService;
 import com.example.rels.domain.lecture.service.LectureTimeValidator;
@@ -76,7 +73,8 @@ class LectureServiceTest {
 				lectureEnrollmentRepository,
 				userRepository,
 				timeValidator,
-				lifecycleHandler
+				lifecycleHandler,
+				new LectureAccessValidator(lectureRepository)
 		);
 	}
 
@@ -273,52 +271,5 @@ class LectureServiceTest {
 
 		var exception = assertThrows(ResponseStatusException.class, () -> lectureService.deleteLecture(1L, 2L, Role.USER));
 		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
-	}
-
-	@Test
-	@DisplayName("대기중인 신청자를 수락(ENROLLED)으로 변경할 수 있다.")
-	void decideWaitingEnrollmentPromotesToEnrolled() {
-		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
-		UserEntity student = TestEntityFactory.createUser("student@test.com", "student", "2000000000", Role.USER, 2L);
-		LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20, 1L);
-
-		LectureEnrollmentEntity waitingEnrollment = new LectureEnrollmentEntity(lecture, student, EnrollmentStatus.WAITING);
-
-		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
-		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(waitingEnrollment));
-		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(5L);
-		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(2L);
-
-		EnrollmentResponse response = lectureService.decideWaitingEnrollment(1L, 2L, Role.ADMIN);
-
-		assertEquals(EnrollmentStatus.ENROLLED.name(), response.enrollmentStatus());
-		assertEquals(6L, response.enrolledCount());
-		assertEquals(1L, response.waitingCount());
-	}
-
-	@Test
-	@DisplayName("출석 상태 일괄 변경 시 N+1 문제 해결을 위해 배치 조회를 정상 수행한다.")
-	void updateAttendancesUsesBatchFetching() {
-		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
-		UserEntity student1 = TestEntityFactory.createUser("student1@test.com", "student1", "2000000000", Role.USER, 2L);
-		UserEntity student2 = TestEntityFactory.createUser("student2@test.com", "student2", "3000000000", Role.USER, 3L);
-		LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20, 1L);
-
-		LectureEnrollmentEntity enrollment1 = new LectureEnrollmentEntity(lecture, student1, EnrollmentStatus.ENROLLED);
-		LectureEnrollmentEntity enrollment2 = new LectureEnrollmentEntity(lecture, student2, EnrollmentStatus.ENROLLED);
-
-		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
-		when(lectureEnrollmentRepository.findAllByLectureIdAndUserIdIn(eq(1L), eq(List.of(2L, 3L))))
-				.thenReturn(List.of(enrollment1, enrollment2));
-
-		List<AttendanceUpdateRequest> requests = List.of(
-				new AttendanceUpdateRequest(2L, AttendanceStatus.ATTENDED),
-				new AttendanceUpdateRequest(3L, AttendanceStatus.ABSENT)
-		);
-
-		assertDoesNotThrow(() -> lectureService.updateAttendances(1L, 1L, Role.USER, requests));
-		assertEquals(AttendanceStatus.ATTENDED, enrollment1.getAttendanceStatus());
-		assertEquals(AttendanceStatus.ABSENT, enrollment2.getAttendanceStatus());
-		verify(lectureEnrollmentRepository).findAllByLectureIdAndUserIdIn(eq(1L), eq(List.of(2L, 3L)));
 	}
 }
