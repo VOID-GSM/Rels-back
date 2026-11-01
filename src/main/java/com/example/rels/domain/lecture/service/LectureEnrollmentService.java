@@ -171,8 +171,8 @@ public class LectureEnrollmentService {
 
 	@Transactional
 	public EnrollmentResponse decideWaitingEnrollment(Long lectureId, Long enrollmentUserId, Role currentUserRole) {
-		LectureEntity lecture = accessValidator.requireLecture(lectureId);
 		accessValidator.validateAdmin(currentUserRole);
+		LectureEntity lecture = accessValidator.requireLectureForUpdate(lectureId);
 
 		LectureEnrollmentEntity enrollment = lectureEnrollmentRepository.findByLectureIdAndUserId(lectureId, enrollmentUserId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "대기 신청 내역이 없습니다."));
