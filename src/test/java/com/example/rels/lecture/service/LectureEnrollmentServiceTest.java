@@ -6,6 +6,7 @@ import com.example.rels.domain.lecture.entity.EnrollmentStatus;
 import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
 import com.example.rels.domain.lecture.entity.LectureEntity;
 import com.example.rels.domain.lecture.entity.LectureStatus;
+import com.example.rels.domain.lecture.repository.LectureEnrollmentCountProjection;
 import com.example.rels.domain.lecture.repository.LectureEnrollmentRepository;
 import com.example.rels.domain.lecture.repository.LectureRepository;
 import com.example.rels.domain.lecture.service.LectureAccessValidator;
@@ -69,7 +70,7 @@ class LectureEnrollmentServiceTest {
                 lifecycleHandler,
                 accessValidator
         );
-        lectureStatusScheduler = new LectureStatusScheduler(lectureRepository, lifecycleHandler);
+        lectureStatusScheduler = new LectureStatusScheduler(lectureRepository, lectureEnrollmentRepository, lifecycleHandler);
 
         LectureEnrollmentEntity savedMock = mock(LectureEnrollmentEntity.class);
         lenient().when(savedMock.getRequestedAt()).thenReturn(LocalDateTime.now());
@@ -265,14 +266,43 @@ class LectureEnrollmentServiceTest {
         LectureEnrollmentEntity secondWaiting = TestEntityFactory.createEnrollment(lecture, TestEntityFactory.createUser("second2@test.com", "second2", "2102", Role.USER, 3L), EnrollmentStatus.WAITING, 3L);
         LectureEnrollmentEntity thirdWaiting = TestEntityFactory.createEnrollment(lecture, TestEntityFactory.createUser("second3@test.com", "second3", "2103", Role.USER, 4L), EnrollmentStatus.WAITING, 4L);
 
-        when(lectureRepository.findAll()).thenReturn(List.of(lecture));
-        when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(1L);
+        when(lectureRepository.findAllByStatusNot(LectureStatus.CLOSE)).thenReturn(List.of(lecture));
+        LectureEnrollmentCountProjection enrolledCount = enrollmentCount(1L, EnrollmentStatus.ENROLLED, 1L);
+        when(lectureEnrollmentRepository.countEnrollmentsByLectureIds(List.of(1L))).thenReturn(List.of(enrolledCount));
 
         lectureStatusScheduler.syncLectureStatuses();
 
         assertEquals(EnrollmentStatus.WAITING, firstWaiting.getStatus());
         assertEquals(EnrollmentStatus.WAITING, secondWaiting.getStatus());
         assertEquals(EnrollmentStatus.WAITING, thirdWaiting.getStatus());
+    }
+
+    @Test
+    @DisplayName("상태 동기화는 CLOSE가 아닌 강연만 조회하고 신청 인원을 한 번에 집계한다")
+    void syncCountsEnrollmentsInSingleQuery() {
+        UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 100L);
+        LectureEntity confirmedLecture = TestEntityFactory.createLecture("title1", "description1", creator, "장소", LocalDate.now().plusDays(7), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20, 1L);
+        LectureEntity openLecture = TestEntityFactory.createLecture("title2", "description2", creator, "장소", LocalDate.now().plusDays(7), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20, 2L);
+
+        when(lectureRepository.findAllByStatusNot(LectureStatus.CLOSE)).thenReturn(List.of(confirmedLecture, openLecture));
+        LectureEnrollmentCountProjection enrolled = enrollmentCount(1L, EnrollmentStatus.ENROLLED, 10L);
+        LectureEnrollmentCountProjection waiting = enrollmentCount(1L, EnrollmentStatus.WAITING, 3L);
+        when(lectureEnrollmentRepository.countEnrollmentsByLectureIds(List.of(1L, 2L))).thenReturn(List.of(enrolled, waiting));
+
+        lectureStatusScheduler.syncLectureStatuses();
+
+        assertEquals(LectureStatus.CONFIRMED, confirmedLecture.getStatus());
+        assertEquals(LectureStatus.OPEN, openLecture.getStatus());
+        verify(lectureRepository, never()).findAll();
+        verify(lectureEnrollmentRepository, never()).countByLectureIdAndStatus(any(), any());
+    }
+
+    private LectureEnrollmentCountProjection enrollmentCount(Long lectureId, EnrollmentStatus status, Long count) {
+        LectureEnrollmentCountProjection projection = mock(LectureEnrollmentCountProjection.class);
+        lenient().when(projection.getLectureId()).thenReturn(lectureId);
+        lenient().when(projection.getStatus()).thenReturn(status);
+        lenient().when(projection.getEnrollmentCount()).thenReturn(count);
+        return projection;
     }
 
     @Test
