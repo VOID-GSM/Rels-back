@@ -100,7 +100,7 @@
 		@Transactional
 		public void updateLectureApproval(Long lectureId, Role currentUserRole, LectureApprovalRequest request) {
 			accessValidator.validateAdmin(currentUserRole);
-			LectureEntity lecture = accessValidator.requireLecture(lectureId);
+			LectureEntity lecture = accessValidator.requireLectureForUpdate(lectureId);
 			lecture.updateApprovalStatus(request.approvalStatus(), request.rejectionReason());
 	
 			if (request.approvalStatus() == ApprovalStatus.APPROVED) {
@@ -128,7 +128,7 @@
 			validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
 			timeValidator.validateApplicationDeadline(request.lectureDate(), request.lectureTime(), request.applicationDeadline());
 	
-			LectureEntity lecture = accessValidator.requireLecture(lectureId);
+			LectureEntity lecture = accessValidator.requireLectureForUpdate(lectureId);
 			accessValidator.validateCreator(lecture, userId, userRole);
 	
 			lecture.updateAllDetails(
@@ -149,7 +149,7 @@
 	
 		@Transactional
 		public void deleteLecture(Long lectureId, Long userId, Role userRole) {
-			LectureEntity lecture = accessValidator.requireLecture(lectureId);
+			LectureEntity lecture = accessValidator.requireLectureForUpdate(lectureId);
 			accessValidator.validateCreator(lecture, userId, userRole);
 	
 			lectureEnrollmentRepository.deleteByLectureId(lectureId);
