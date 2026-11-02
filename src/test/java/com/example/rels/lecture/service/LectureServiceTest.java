@@ -1,6 +1,7 @@
 package com.example.rels.lecture.service;
 
 import com.example.rels.domain.lecture.dto.request.LectureCreateRequest;
+import com.example.rels.domain.lecture.dto.request.LectureApprovalRequest;
 import com.example.rels.domain.lecture.dto.request.LectureUpdateRequest;
 import com.example.rels.domain.lecture.dto.response.LectureDetailResponse;
 import com.example.rels.domain.lecture.dto.response.LectureSummaryResponse;
@@ -220,7 +221,7 @@ class LectureServiceTest {
 		LectureUpdateRequest request = new LectureUpdateRequest("updated title", "updated description", null, 20, "updated 장소", LocalDate.now().plusDays(2), LocalTime.NOON, deadline, Set.of());
 
 		doNothing().when(timeValidator).validateApplicationDeadline(any(), any(), any());
-		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
 		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(0L);
 		when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(0L);
 		when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.empty());
@@ -241,7 +242,7 @@ class LectureServiceTest {
 		LectureUpdateRequest request = new LectureUpdateRequest("updated title", "updated description", null, 20, "updated 장소", LocalDate.now().plusDays(2), LocalTime.NOON, deadline, Set.of());
 
 		doNothing().when(timeValidator).validateApplicationDeadline(any(), any(), any());
-		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
 
 		var exception = assertThrows(ResponseStatusException.class, () -> lectureService.updateLecture(1L, 2L, Role.USER, request));
 		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
@@ -253,7 +254,7 @@ class LectureServiceTest {
 		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
 		LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20, 1L);
 
-		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
 
 		lectureService.deleteLecture(1L, 2L, Role.ADMIN);
 
@@ -267,9 +268,33 @@ class LectureServiceTest {
 		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
 		LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20, 1L);
 
-		when(lectureRepository.findById(1L)).thenReturn(Optional.of(lecture));
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
 
 		var exception = assertThrows(ResponseStatusException.class, () -> lectureService.deleteLecture(1L, 2L, Role.USER));
 		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+	}
+
+	@Test
+	@DisplayName("강연 승인은 강연에 락을 걸고 조회한다.")
+	void updateLectureApprovalLocksLecture() {
+		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+		LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().plusDays(1), 20, 1L);
+
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+
+		lectureService.updateLectureApproval(1L, Role.ADMIN, new LectureApprovalRequest(ApprovalStatus.APPROVED, null));
+
+		assertEquals(ApprovalStatus.APPROVED, lecture.getApprovalStatus());
+		verify(lectureRepository, never()).findById(anyLong());
+	}
+
+	@Test
+	@DisplayName("관리자가 아니면 강연을 조회하기 전에 승인 요청을 거절한다.")
+	void updateLectureApprovalRejectsNonAdminBeforeLoadingLecture() {
+		var exception = assertThrows(ResponseStatusException.class,
+				() -> lectureService.updateLectureApproval(1L, Role.USER, new LectureApprovalRequest(ApprovalStatus.APPROVED, null)));
+
+		assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+		verifyNoInteractions(lectureRepository);
 	}
 }
