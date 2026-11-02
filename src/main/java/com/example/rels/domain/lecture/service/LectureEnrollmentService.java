@@ -72,30 +72,10 @@ public class LectureEnrollmentService {
 					throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 신청한 강의입니다.");
 				});
 
-		Integer userGrade = lifecycleHandler.extractGradeFromStudentNumber(user.getStudentNumber());
-		Map<Integer, Integer> capacityByGrade = lecture.getCapacityByGrade() == null ? Map.of() : lecture.getCapacityByGrade();
-		Integer totalCapacity = lecture.getTotalCapacity();
 		long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.ENROLLED);
 		long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lectureId, EnrollmentStatus.WAITING);
 
-		boolean useGradeCapacity = !capacityByGrade.isEmpty();
-		boolean isFull;
-		if (isAfterApplicationDeadline) {
-			isFull = true;
-		} else if (useGradeCapacity) {
-			Integer gradeCapacity = userGrade == null ? null : capacityByGrade.get(userGrade);
-			if (gradeCapacity == null) {
-				isFull = true;
-			} else {
-				long gradeEnrolled = countEnrolledInGrade(lectureId, userGrade);
-				isFull = gradeEnrolled >= gradeCapacity;
-			}
-		} else if (totalCapacity != null && totalCapacity > 0) {
-			isFull = enrolledCount >= totalCapacity;
-		} else {
-			isFull = false;
-		}
-
+		boolean isFull = isAfterApplicationDeadline || isCapacityFull(lecture, user, enrolledCount);
 		EnrollmentStatus status = isFull ? EnrollmentStatus.WAITING : EnrollmentStatus.ENROLLED;
 		LectureEnrollmentEntity savedEnrollment = lectureEnrollmentRepository.save(new LectureEnrollmentEntity(lecture, user, status));
 
@@ -111,6 +91,25 @@ public class LectureEnrollmentService {
 
 	private boolean isAfterApplicationDeadline(LectureEntity lecture, LocalDateTime now) {
 		return lecture.getApplicationDeadline() != null && now.isAfter(lecture.getApplicationDeadline());
+	}
+
+	private boolean isCapacityFull(LectureEntity lecture, UserEntity user, long enrolledCount) {
+		Map<Integer, Integer> capacityByGrade = lecture.getCapacityByGrade() == null ? Map.of() : lecture.getCapacityByGrade();
+		if (!capacityByGrade.isEmpty()) {
+			return isGradeCapacityFull(lecture.getId(), user, capacityByGrade);
+		}
+
+		Integer totalCapacity = lecture.getTotalCapacity();
+		return totalCapacity != null && totalCapacity > 0 && enrolledCount >= totalCapacity;
+	}
+
+	private boolean isGradeCapacityFull(Long lectureId, UserEntity user, Map<Integer, Integer> capacityByGrade) {
+		Integer userGrade = lifecycleHandler.extractGradeFromStudentNumber(user.getStudentNumber());
+		Integer gradeCapacity = userGrade == null ? null : capacityByGrade.get(userGrade);
+		if (gradeCapacity == null) {
+			return true;
+		}
+		return countEnrolledInGrade(lectureId, userGrade) >= gradeCapacity;
 	}
 
 	@Transactional
