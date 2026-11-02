@@ -15,11 +15,6 @@ spring:
     driver-class-name: ${DB_DRIVER:org.mariadb.jdbc.Driver}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
   jpa:
     database-platform: org.hibernate.dialect.MariaDBDialect
     hibernate:
