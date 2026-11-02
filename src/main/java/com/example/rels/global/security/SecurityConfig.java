@@ -55,7 +55,7 @@ public class SecurityConfig {
 							"/webjars/**")
 					.permitAll()
 					.requestMatchers(HttpMethod.GET, "/api/auth/dg/start", "/api/auth/dg/callback").permitAll()
-					.requestMatchers(HttpMethod.POST, "/api/auth/signin").permitAll()
+					.requestMatchers(HttpMethod.POST, "/api/auth/signin", "/api/auth/refresh").permitAll()
 					.requestMatchers("/error").permitAll()
 					// 기타 허용 경로
 					.requestMatchers("/", "/intro", "/signin", "/callback").permitAll()
