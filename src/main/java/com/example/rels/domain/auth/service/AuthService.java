@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.rels.domain.auth.dto.OAuthSignInRequest;
@@ -40,6 +41,7 @@ public class AuthService {
 	private final UserRepository userRepository;
 	private final JwtTokenProvider jwtTokenProvider;
 	private final RefreshTokenRepository refreshTokenRepository;
+	private final TransactionTemplate transactionTemplate;
 
 	@Value("${oauth.datagsm.redirect-uris}")
 	private Set<String> allowedRedirectUris;
@@ -48,19 +50,19 @@ public class AuthService {
 	private long refreshTokenValidityInMinutes;
 
 	public AuthService(DataGsmOAuthClient dataGsmOAuthClient, UserRepository userRepository,
-					   JwtTokenProvider jwtTokenProvider, RefreshTokenRepository refreshTokenRepository) {
+					   JwtTokenProvider jwtTokenProvider, RefreshTokenRepository refreshTokenRepository,
+					   TransactionTemplate transactionTemplate) {
 		this.dataGsmOAuthClient = dataGsmOAuthClient;
 		this.userRepository = userRepository;
 		this.jwtTokenProvider = jwtTokenProvider;
 		this.refreshTokenRepository = refreshTokenRepository;
+		this.transactionTemplate = transactionTemplate;
 	}
 
-	@Transactional
 	public OAuthSignInResponse signIn(OAuthSignInRequest request) {
 		return signIn(request.authCode(), request.redirectUri(), request.codeVerifier());
 	}
 
-	@Transactional
 	public OAuthSignInResponse signIn(String authCode, String redirectUri, String codeVerifier) {
 		assertAllowedRedirectUri(redirectUri);
 
@@ -82,24 +84,8 @@ public class AuthService {
 				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "학생 정보가 유효하지 않습니다.");
 			}
 
-			team.themoment.datagsm.sdk.oauth.model.StudentRole studentRole = student.getRole();
-			UserEntity user = findOrCreateUser(userInfo.getEmail(), student.getName(), String.valueOf(student.getStudentNumber()), studentRole);
-
-			String accessToken = jwtTokenProvider.createToken(user);
-			String refreshToken = jwtTokenProvider.createRefreshToken(user);
-
-			LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(refreshTokenValidityInMinutes);
-			RefreshTokenEntity savedRefreshToken = refreshTokenRepository.save(
-					new RefreshTokenEntity(user.getId(), refreshToken, expiresAt));
-
-			return new OAuthSignInResponse(
-					accessToken,
-					savedRefreshToken.getToken(),
-					user.getId(),
-					user.getEmail(),
-					user.getName(),
-					user.getStudentNumber(),
-					user.getRole().name());
+			// 외부 호출 동안 DB 커넥션을 잡지 않도록 저장 단계만 트랜잭션으로 묶는다.
+			return transactionTemplate.execute(status -> saveUserAndIssueTokens(userInfo.getEmail(), student));
 
 		} catch (TimeoutException e) {
 			log.error("DataGSM OAuth 통신 타임아웃 (15초 초과)");
@@ -183,6 +169,26 @@ public class AuthService {
 	public UserEntity requireUser(Long userId) {
 		return userRepository.findById(userId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "사용자를 찾을 수 없습니다."));
+	}
+
+	private OAuthSignInResponse saveUserAndIssueTokens(String email, Student student) {
+		UserEntity user = findOrCreateUser(email, student.getName(), String.valueOf(student.getStudentNumber()), student.getRole());
+
+		String accessToken = jwtTokenProvider.createToken(user);
+		String refreshToken = jwtTokenProvider.createRefreshToken(user);
+
+		LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(refreshTokenValidityInMinutes);
+		RefreshTokenEntity savedRefreshToken = refreshTokenRepository.save(
+				new RefreshTokenEntity(user.getId(), refreshToken, expiresAt));
+
+		return new OAuthSignInResponse(
+				accessToken,
+				savedRefreshToken.getToken(),
+				user.getId(),
+				user.getEmail(),
+				user.getName(),
+				user.getStudentNumber(),
+				user.getRole().name());
 	}
 
 	private UserEntity findOrCreateUser(String email, String name, String studentNumber, team.themoment.datagsm.sdk.oauth.model.StudentRole studentRole) {
