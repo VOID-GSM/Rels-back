@@ -21,6 +21,7 @@
 	import com.example.rels.domain.lecture.entity.EnrollmentStatus;
 	import com.example.rels.domain.lecture.entity.LectureEnrollmentEntity;
 	import com.example.rels.domain.lecture.entity.LectureEntity;
+	import com.example.rels.domain.lecture.entity.LectureStatus;
 	import com.example.rels.domain.lecture.repository.LectureEnrollmentCountProjection;
 	import com.example.rels.domain.lecture.repository.LectureEnrollmentRepository;
 	import com.example.rels.domain.lecture.repository.LectureRepository;
@@ -71,6 +72,7 @@
 			lecture.setCapacityByGrade(request.capacityByGrade());
 			lecture.updateSpeakers(resolveSpeakers(request.speakerIds()));
 			lecture = lectureRepository.save(lecture);
+			lifecycleHandler.refreshLectureLifecycle(lecture, SchoolTime.now());
 			return toLectureDetail(lecture, userId);
 		}
 	
@@ -139,6 +141,7 @@
 					request.applicationDeadline()
 			);
 			lecture.updateSpeakers(resolveSpeakers(request.speakerIds()));
+			lifecycleHandler.refreshLectureLifecycle(lecture, SchoolTime.now());
 	
 			return toLectureDetail(lecture, userId);
 		}
@@ -185,7 +188,7 @@
 				throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
 			}
 			long enrolledCount = getEnrollmentCount(enrollmentCountsByLectureId, lecture.getId(), EnrollmentStatus.ENROLLED);
-			lifecycleHandler.refreshLectureLifecycle(lecture, SchoolTime.now(), enrolledCount);
+			LectureStatus lectureStatus = lifecycleHandler.resolveStatus(lecture, SchoolTime.now(), enrolledCount);
 			long waitingCount = getEnrollmentCount(enrollmentCountsByLectureId, lecture.getId(), EnrollmentStatus.WAITING);
 	
 			return new LectureSummaryResponse(
@@ -196,7 +199,7 @@
 					lecture.getCreator().getName(),
 					lecture.getCreator().getStudentNumber(),
 					toSpeakerResponses(lecture),
-					lecture.getStatus().name(),
+					lectureStatus.name(),
 					lecture.getApprovalStatus().name(),
 					lecture.getRejectionReason(),
 					enrolledCount,
@@ -247,8 +250,8 @@
 			if (lecture.getCreator() == null) {
 				throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "강의 생성자 정보가 없습니다.");
 			}
-			lifecycleHandler.refreshLectureLifecycle(lecture, SchoolTime.now());
 			long enrolledCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.ENROLLED);
+			LectureStatus lectureStatus = lifecycleHandler.resolveStatus(lecture, SchoolTime.now(), enrolledCount);
 			long waitingCount = lectureEnrollmentRepository.countByLectureIdAndStatus(lecture.getId(), EnrollmentStatus.WAITING);
 	
 			String myEnrollmentStatus = lectureEnrollmentRepository.findByLectureIdAndUserId(lecture.getId(), userId)
@@ -263,7 +266,7 @@
 					lecture.getCreator().getName(),
 					lecture.getCreator().getStudentNumber(),
 					toSpeakerResponses(lecture),
-					lecture.getStatus().name(),
+					lectureStatus.name(),
 					lecture.getApprovalStatus().name(),
 					lecture.getRejectionReason(),
 					enrolledCount,
