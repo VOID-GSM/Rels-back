@@ -27,6 +27,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        default_batch_fetch_size: 100
 
 jwt:
   secret: ${JWT_SECRET}

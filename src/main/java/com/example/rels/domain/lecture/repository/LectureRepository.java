@@ -18,10 +18,10 @@ import jakarta.persistence.LockModeType;
 
 public interface LectureRepository extends JpaRepository<LectureEntity, Long> {
 
-	@EntityGraph(attributePaths = {"creator", "speakers"})
+	@EntityGraph(attributePaths = "creator")
 	Page<LectureEntity> findAllByApprovalStatusOrderByCreatedAtDesc(ApprovalStatus approvalStatus, Pageable pageable);
 
-	@EntityGraph(attributePaths = {"creator", "speakers"})
+	@EntityGraph(attributePaths = "creator")
 	@Query(
 			value = "select distinct l from LectureEntity l left join l.speakers s where l.approvalStatus = :approvalStatus or l.creator.id = :userId or s.id = :userId",
 			countQuery = "select count(distinct l) from LectureEntity l left join l.speakers s where l.approvalStatus = :approvalStatus or l.creator.id = :userId or s.id = :userId"
@@ -36,6 +36,6 @@ public interface LectureRepository extends JpaRepository<LectureEntity, Long> {
 	@Query("select distinct l from LectureEntity l join l.speakers s where s.id = :userId order by l.createdAt desc")
 	List<LectureEntity> findAllBySpeakerIdOrderByCreatedAtDesc(@Param("userId") Long userId);
 
-	@EntityGraph(attributePaths = {"creator", "speakers"})
+	@EntityGraph(attributePaths = "creator")
 	Page<LectureEntity> findAllByOrderByCreatedAtDesc(Pageable pageable);
 }

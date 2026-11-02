@@ -1,5 +1,6 @@
 	package com.example.rels.domain.lecture.service;
 	
+	import java.util.HashMap;
 	import java.util.List;
 	import java.util.Map;
 	import java.util.Set;
@@ -208,7 +209,7 @@
 					lecture.getApplicationDeadline(),
 					lecture.getCreatedAt(),
 					lecture.getApprovedAt(),
-					lecture.getCapacityByGrade(),
+					new HashMap<>(lecture.getCapacityByGrade()),
 					lecture.getTotalCapacity()
 			);
 		}
@@ -275,7 +276,7 @@
 					lecture.getApplicationDeadline(),
 					lecture.getCreatedAt(),
 					lecture.getApprovedAt(),
-					lecture.getCapacityByGrade(),
+					new HashMap<>(lecture.getCapacityByGrade()),
 					lecture.getTotalCapacity()
 			);
 		}
