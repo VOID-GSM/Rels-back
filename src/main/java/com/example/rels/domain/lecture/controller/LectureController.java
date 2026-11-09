@@ -129,6 +129,15 @@ public class LectureController {
 		return lectureEnrollmentService.cancelEnrollment(lectureId, authenticatedUser.userId());
 	}
 
+	@DeleteMapping("/{lectureId}/enrollments/{userId}")
+	public EnrollmentResponse cancelEnrollmentByAdmin(
+			@PathVariable Long lectureId,
+			@PathVariable Long userId,
+			@AuthenticationPrincipal AuthenticatedUser currentUser) {
+		AuthenticatedUser authenticatedUser = requireUser(currentUser);
+		return lectureEnrollmentService.cancelEnrollmentByAdmin(lectureId, userId, authenticatedUser.role());
+	}
+
 	@GetMapping("/{lectureId}/enrollments")
 	public EnrollmentListResponse getEnrollments(
 			@PathVariable Long lectureId,
