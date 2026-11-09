@@ -57,6 +57,7 @@
 		public LectureDetailResponse createLecture(Long userId, LectureCreateRequest request) {
 			validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
 			timeValidator.validateApplicationDeadline(request.lectureDate(), request.lectureTime(), request.applicationDeadline());
+			timeValidator.validateApplicationOpenAt(request.applicationOpenAt(), request.applicationDeadline());
 	
 			UserEntity creator = requireUser(userId);
 	
@@ -71,6 +72,7 @@
 					request.totalCapacity()
 			);
 			lecture.setCapacityByGrade(request.capacityByGrade());
+			lecture.updateApplicationOpenAt(request.applicationOpenAt());
 			lecture.updateSpeakers(resolveSpeakers(request.speakerIds()));
 			lecture = lectureRepository.save(lecture);
 			lifecycleHandler.refreshLectureLifecycle(lecture, SchoolTime.now());
@@ -127,6 +129,7 @@
 		public LectureDetailResponse updateLecture(Long lectureId, Long userId, Role userRole, LectureUpdateRequest request) {
 			validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
 			timeValidator.validateApplicationDeadline(request.lectureDate(), request.lectureTime(), request.applicationDeadline());
+			timeValidator.validateApplicationOpenAt(request.applicationOpenAt(), request.applicationDeadline());
 	
 			LectureEntity lecture = accessValidator.requireLectureForUpdate(lectureId);
 			accessValidator.validateCreator(lecture, userId, userRole);
@@ -141,6 +144,7 @@
 					request.lectureTime(),
 					request.applicationDeadline()
 			);
+			lecture.updateApplicationOpenAt(request.applicationOpenAt());
 			lecture.updateSpeakers(resolveSpeakers(request.speakerIds()));
 			lifecycleHandler.refreshLectureLifecycle(lecture, SchoolTime.now());
 	
@@ -210,6 +214,7 @@
 					lecture.getLectureDate(),
 					lecture.getLectureTime(),
 					lecture.getApplicationDeadline(),
+					lecture.getApplicationOpenAt(),
 					lecture.getCreatedAt(),
 					lecture.getApprovedAt(),
 					new HashMap<>(lecture.getCapacityByGrade()),
@@ -277,6 +282,7 @@
 					lecture.getLectureDate(),
 					lecture.getLectureTime(),
 					lecture.getApplicationDeadline(),
+					lecture.getApplicationOpenAt(),
 					lecture.getCreatedAt(),
 					lecture.getApprovedAt(),
 					new HashMap<>(lecture.getCapacityByGrade()),
