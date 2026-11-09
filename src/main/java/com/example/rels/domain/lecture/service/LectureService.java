@@ -1,8 +1,10 @@
 	package com.example.rels.domain.lecture.service;
 	
+	import java.time.LocalDateTime;
 	import java.util.HashMap;
 	import java.util.List;
 	import java.util.Map;
+	import java.util.Objects;
 	import java.util.Set;
 	import java.util.stream.Collectors;
 	
@@ -58,7 +60,8 @@
 			validateLectureCapacityRules(request.capacityByGrade(), request.totalCapacity());
 			timeValidator.validateApplicationDeadline(request.lectureDate(), request.lectureTime(), request.applicationDeadline());
 			timeValidator.validateApplicationOpenAt(request.applicationOpenAt(), request.applicationDeadline());
-	
+			timeValidator.validateNewApplicationOpenAt(request.applicationOpenAt(), SchoolTime.now());
+
 			UserEntity creator = requireUser(userId);
 	
 			LectureEntity lecture = new LectureEntity(
@@ -133,7 +136,8 @@
 	
 			LectureEntity lecture = accessValidator.requireLectureForUpdate(lectureId);
 			accessValidator.validateCreator(lecture, userId, userRole);
-	
+			validateApplicationOpenAtChange(lecture, request.applicationOpenAt());
+
 			lecture.updateAllDetails(
 					request.title(),
 					request.description(),
@@ -151,6 +155,20 @@
 			return toLectureDetail(lecture, userId);
 		}
 	
+		/**
+		 * 신청 시작 시각을 바꿀 때만 본다. 그대로 다시 보낸 값은 이미 지난 시각이어도 통과시킨다.
+		 * 이미 신청한 학생이 있으면 바꿀 수 없다. 먼저 신청한 학생과 새 기준이 어긋나기 때문이다.
+		 */
+		private void validateApplicationOpenAtChange(LectureEntity lecture, LocalDateTime requestedOpenAt) {
+			if (Objects.equals(lecture.getApplicationOpenAt(), requestedOpenAt)) {
+				return;
+			}
+			if (lectureEnrollmentRepository.existsByLectureId(lecture.getId())) {
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "이미 신청한 학생이 있어 신청 시작 시각을 바꿀 수 없습니다.");
+			}
+			timeValidator.validateNewApplicationOpenAt(requestedOpenAt, SchoolTime.now());
+		}
+
 		@Transactional
 		public void deleteLecture(Long lectureId, Long userId, Role userRole) {
 			LectureEntity lecture = accessValidator.requireLectureForUpdate(lectureId);

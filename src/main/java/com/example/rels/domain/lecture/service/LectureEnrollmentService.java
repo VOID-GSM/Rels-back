@@ -52,13 +52,7 @@ public class LectureEnrollmentService {
 
 		LocalDateTime now = SchoolTime.now();
 
-		if (lecture.getApplicationOpenAt() != null) {
-			timeValidator.validateCustomApplicationTime(lecture.getApplicationOpenAt(), now);
-		} else {
-			LocalDateTime applicationOpenReference = SchoolTime.fromServerTime(
-					lecture.getApprovedAt() != null ? lecture.getApprovedAt() : lecture.getCreatedAt());
-			timeValidator.validateApplicationTime(applicationOpenReference, now);
-		}
+		timeValidator.validateApplicationOpen(lecture, now);
 		boolean isAfterApplicationDeadline = isAfterApplicationDeadline(lecture, now);
 
 		lifecycleHandler.refreshLectureLifecycle(lecture, now);

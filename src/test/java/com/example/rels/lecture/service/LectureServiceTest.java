@@ -266,6 +266,63 @@ class LectureServiceTest {
 	}
 
 	@Test
+	@DisplayName("신청한 학생이 있으면 신청 시작 시각을 바꿀 수 없다.")
+	void updateLectureRejectsOpenTimeChangeAfterEnrollments() {
+		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+		LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(3), LocalTime.NOON, LocalDateTime.now().plusDays(2), 20, 1L);
+
+		LectureUpdateRequest request = new LectureUpdateRequest("title", "description", null, 20, "장소", LocalDate.now().plusDays(3), LocalTime.NOON, LocalDateTime.now().plusDays(2), LocalDateTime.now().plusDays(1), Set.of());
+
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+		when(lectureEnrollmentRepository.existsByLectureId(1L)).thenReturn(true);
+
+		var exception = assertThrows(ResponseStatusException.class, () -> lectureService.updateLecture(1L, 1L, Role.USER, request));
+		assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+		assertNull(lecture.getApplicationOpenAt());
+	}
+
+	@Test
+	@DisplayName("신청 시작 시각을 그대로 보내면 이미 지난 시각이어도 다시 검사하지 않는다.")
+	void updateLectureKeepsUnchangedPastOpenTime() {
+		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+		LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(3), LocalTime.NOON, LocalDateTime.now().plusDays(2), 20, 1L);
+		LocalDateTime pastOpenAt = LocalDateTime.of(2026, 1, 1, 9, 0);
+		lecture.updateApplicationOpenAt(pastOpenAt);
+
+		LectureUpdateRequest request = new LectureUpdateRequest("new title", "description", null, 20, "장소", LocalDate.now().plusDays(3), LocalTime.NOON, LocalDateTime.now().plusDays(2), pastOpenAt, Set.of());
+
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+		lenient().when(lectureEnrollmentRepository.countByLectureIdAndStatus(eq(1L), any())).thenReturn(0L);
+		lenient().when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 1L)).thenReturn(Optional.empty());
+
+		LectureDetailResponse response = lectureService.updateLecture(1L, 1L, Role.USER, request);
+
+		assertEquals(pastOpenAt, response.applicationOpenAt());
+		verify(lectureEnrollmentRepository, never()).existsByLectureId(any());
+		verify(timeValidator, never()).validateNewApplicationOpenAt(any(), any());
+	}
+
+	@Test
+	@DisplayName("신청 전이면 신청 시작 시각을 바꿀 수 있고, 새 시각은 미래인지 검사한다.")
+	void updateLectureChangesOpenTimeBeforeEnrollments() {
+		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+		LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(3), LocalTime.NOON, LocalDateTime.now().plusDays(2), 20, 1L);
+		LocalDateTime newOpenAt = LocalDateTime.now().plusDays(1);
+
+		LectureUpdateRequest request = new LectureUpdateRequest("title", "description", null, 20, "장소", LocalDate.now().plusDays(3), LocalTime.NOON, LocalDateTime.now().plusDays(2), newOpenAt, Set.of());
+
+		when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+		when(lectureEnrollmentRepository.existsByLectureId(1L)).thenReturn(false);
+		lenient().when(lectureEnrollmentRepository.countByLectureIdAndStatus(eq(1L), any())).thenReturn(0L);
+		lenient().when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 1L)).thenReturn(Optional.empty());
+
+		LectureDetailResponse response = lectureService.updateLecture(1L, 1L, Role.USER, request);
+
+		assertEquals(newOpenAt, response.applicationOpenAt());
+		verify(timeValidator).validateNewApplicationOpenAt(eq(newOpenAt), any());
+	}
+
+	@Test
 	@DisplayName("일반 사용자가 타인의 강연을 수정하려고 하면 예외가 발생한다.")
 	void updateLectureRejectsUserFromModifyingOtherUserLecture() {
 		UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);

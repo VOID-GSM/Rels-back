@@ -84,7 +84,7 @@ class LectureEnrollmentServiceTest {
 
         when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
         doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "강의가 종료되었습니다."))
-                .when(timeValidator).validateApplicationTime(any(), any());
+                .when(timeValidator).validateApplicationOpen(any(), any());
 
         var exception = assertThrows(ResponseStatusException.class, () -> lectureEnrollmentService.enroll(1L, 2L));
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
@@ -114,7 +114,7 @@ class LectureEnrollmentServiceTest {
 
         when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
         doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "오후 4시 20분부터 가능합니다."))
-                .when(timeValidator).validateApplicationTime(any(), any());
+                .when(timeValidator).validateApplicationOpen(any(), any());
 
         var exception = assertThrows(ResponseStatusException.class, () -> lectureEnrollmentService.enroll(1L, 2L));
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());

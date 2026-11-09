@@ -19,6 +19,8 @@ public interface LectureEnrollmentRepository extends JpaRepository<LectureEnroll
 
 	long countByLectureIdAndStatus(Long lectureId, EnrollmentStatus status);
 
+	boolean existsByLectureId(Long lectureId);
+
 	@Query("""
           select e.lecture.id as lectureId, e.status as status, count(e) as enrollmentCount
           from LectureEnrollmentEntity e
