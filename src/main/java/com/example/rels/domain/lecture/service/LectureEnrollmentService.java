@@ -126,6 +126,28 @@ public class LectureEnrollmentService {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "신청 마감 후에는 확정된 신청을 취소할 수 없습니다.");
 		}
 
+		return removeEnrollment(lecture, enrollment, now);
+	}
+
+	/**
+	 * 학생회가 다른 사람의 신청을 지운다. 본인 취소와 달리 마감 뒤에도 확정된 신청을 뺄 수 있다.
+	 * 대기 자동 승급 규칙은 본인 취소와 같다(마감 전에만 올린다).
+	 */
+	@Transactional
+	public EnrollmentResponse cancelEnrollmentByAdmin(Long lectureId, Long enrollmentUserId, Role currentUserRole) {
+		accessValidator.validateAdmin(currentUserRole);
+		LectureEntity lecture = accessValidator.requireLectureForUpdate(lectureId);
+
+		LectureEnrollmentEntity enrollment = lectureEnrollmentRepository.findByLectureIdAndUserId(lectureId, enrollmentUserId)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "신청 내역이 없습니다."));
+
+		return removeEnrollment(lecture, enrollment, SchoolTime.now());
+	}
+
+	private EnrollmentResponse removeEnrollment(LectureEntity lecture, LectureEnrollmentEntity enrollment, LocalDateTime now) {
+		Long lectureId = lecture.getId();
+		EnrollmentStatus canceledStatus = enrollment.getStatus();
+
 		lectureEnrollmentRepository.delete(enrollment);
 		lectureEnrollmentRepository.flush();
 

@@ -383,6 +383,38 @@ class LectureEnrollmentServiceTest {
     }
 
     @Test
+    @DisplayName("학생회는 마감 뒤에도 확정된 신청을 취소할 수 있고, 대기자는 자동으로 올라가지 않는다")
+    void adminCanCancelConfirmedEnrollmentAfterDeadline() {
+        UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
+        LectureEntity lecture = TestEntityFactory.createLecture("title", "description", creator, "장소", LocalDate.now().plusDays(1), LocalTime.NOON, LocalDateTime.now().minusHours(1), 30, 1L);
+        UserEntity applicant = TestEntityFactory.createUser("user@test.com", "user", "1000000001", Role.USER, 2L);
+        UserEntity waitingUser = TestEntityFactory.createUser("wait@test.com", "wait", "1000000002", Role.USER, 3L);
+        LectureEnrollmentEntity enrolled = TestEntityFactory.createEnrollment(lecture, applicant, EnrollmentStatus.ENROLLED, 1L);
+        LectureEnrollmentEntity waiting = TestEntityFactory.createEnrollment(lecture, waitingUser, EnrollmentStatus.WAITING, 2L);
+
+        when(lectureRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lecture));
+        when(lectureEnrollmentRepository.findByLectureIdAndUserId(1L, 2L)).thenReturn(Optional.of(enrolled));
+        when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.ENROLLED)).thenReturn(29L);
+        when(lectureEnrollmentRepository.countByLectureIdAndStatus(1L, EnrollmentStatus.WAITING)).thenReturn(1L);
+
+        EnrollmentResponse response = lectureEnrollmentService.cancelEnrollmentByAdmin(1L, 2L, Role.ADMIN);
+
+        verify(lectureEnrollmentRepository).delete(enrolled);
+        assertEquals(EnrollmentStatus.WAITING, waiting.getStatus());
+        assertEquals("CANCELED", response.enrollmentStatus());
+    }
+
+    @Test
+    @DisplayName("학생회가 아니면 다른 사람의 신청을 취소할 수 없다")
+    void nonAdminCannotCancelOthersEnrollment() {
+        var exception = assertThrows(ResponseStatusException.class,
+                () -> lectureEnrollmentService.cancelEnrollmentByAdmin(1L, 2L, Role.USER));
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        verifyNoInteractions(lectureRepository, lectureEnrollmentRepository);
+    }
+
+    @Test
     @DisplayName("신청 마감 뒤에 들어온 신청은 자리가 남아 있어도 대기로 잡힌다")
     void enrollAfterDeadlineBecomesWaiting() {
         UserEntity creator = TestEntityFactory.createUser("creator@test.com", "creator", "1000000000", Role.USER, 1L);
