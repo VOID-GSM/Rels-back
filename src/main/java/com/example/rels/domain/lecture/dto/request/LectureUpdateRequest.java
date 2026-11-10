@@ -20,6 +20,7 @@ public record LectureUpdateRequest(
 		@NotNull LocalDate lectureDate,
 		@NotNull LocalTime lectureTime,
 		@NotNull LocalDateTime applicationDeadline,
+		LocalDateTime applicationOpenAt,
 		Set<@NotNull Long> speakerIds
 ) {
 }

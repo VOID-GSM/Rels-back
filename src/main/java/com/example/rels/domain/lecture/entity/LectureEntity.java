@@ -76,6 +76,10 @@ public class LectureEntity {
 	@Column(name = "application_deadline")
 	private LocalDateTime applicationDeadline;
 
+	/** 강연자가 정한 신청 시작 시각. 비어 있으면 승인한 날 16:20 규칙을 따른다. */
+	@Column(name = "application_open_at")
+	private LocalDateTime applicationOpenAt;
+
 	@Column(name = "total_capacity")
 	private Integer totalCapacity;
 
@@ -186,6 +190,14 @@ public class LectureEntity {
 
 	public LocalDateTime getApplicationDeadline() {
 		return applicationDeadline;
+	}
+
+	public LocalDateTime getApplicationOpenAt() {
+		return applicationOpenAt;
+	}
+
+	public void updateApplicationOpenAt(LocalDateTime applicationOpenAt) {
+		this.applicationOpenAt = applicationOpenAt;
 	}
 
 	public LocalDateTime getLectureEndDateTime() {

@@ -21,6 +21,7 @@ public record LectureCreateRequest(
 		@NotNull LocalDate lectureDate,
 		@NotNull LocalTime lectureTime,
 		@NotNull @Future(message = "신청 마감 시각은 현재보다 미래여야 합니다.") LocalDateTime applicationDeadline,
+		LocalDateTime applicationOpenAt,
 		Set<@NotNull Long> speakerIds
 ) {
 }
